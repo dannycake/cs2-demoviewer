@@ -1,0 +1,6 @@
+# BuildKit reads this instead of the root .dockerignore when building with -f gcbot/Dockerfile
+# from the repo root: the image needs only gcbot's manifest and sources.
+*
+!gcbot/package.json
+!gcbot/package-lock.json
+!gcbot/src/
