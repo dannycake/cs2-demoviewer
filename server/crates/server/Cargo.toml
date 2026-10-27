@@ -1,0 +1,53 @@
+[package]
+name = "demoviewer-server"
+version = "0.1.0"
+edition = "2021"
+publish = false
+# Two bins (the server and demoviewer-pack-cli): plain `cargo run -p demoviewer-server` runs the server.
+default-run = "demoviewer-server"
+
+[dependencies]
+demoviewer-pack = { path = "../pack" }
+parser = { path = "../../vendor/parser" }
+# Same major versions the vendored parser uses: `ParserInputs` takes `ahash::AHashMap`.
+ahash = "0.8"
+memmap2 = "0.9"
+serde_json = "1"
+# URL ingest. reqwest 0.12 + rustls-tls = ring + bundled webpki roots: no system CA store
+# needed in the slim runtime image, no cmake for aws-lc. No `stream` feature: the body is
+# read with `Response::chunk`, which is the same streaming without futures-util.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+url = "2"
+bzip2 = "0.6"
+flate2 = "1"
+# HTTP API, job runner and store.
+axum = "0.8"
+http-body-util = "0.1"
+tower-http = { version = "0.6", features = ["fs", "trace"] }
+tokio-util = { version = "0.7", features = ["io"] }
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+bs58 = "0.5"
+# The version the vendored parser already pulls in.
+rand = "0.8"
+tracing = "0.1"
+# setrlimit for the parse worker's memory cap; the version tokio already pulls in.
+libc = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Match pages' preview images: drawing, PNG in and out, and text in the site's face.
+tiny-skia = { version = "0.11", features = ["png-format"] }
+ab_glyph = "0.2"
+# The preview card as a JPEG: a screenshot is a tenth of the size it is as a PNG.
+jpeg-encoder = "0.6"
+
+[dev-dependencies]
+futures-util = "0.3"
+# Reading the preview card back in the page tests.
+jpeg-decoder = "0.3"
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+
+[[bin]]
+name = "demoviewer-pack-cli"
+path = "src/bin/pack.rs"

@@ -1,0 +1,7 @@
+# One exact compiler for the desktop and the Docker image, which copies this file in and
+# builds `FROM rust:<this version>-bookworm` (Dockerfile): a floating `stable` let the two
+# drift (1.99 here, 1.94 there), and code clean on one did not build on the other. Bump the
+# version here and the Dockerfile's `FROM` together; were they to differ, the image's rustup
+# would fetch this one, so the build still uses it.
+[toolchain]
+channel = "1.99.1"

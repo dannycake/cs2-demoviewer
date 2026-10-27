@@ -1,0 +1,13 @@
+[workspace]
+members = ["crates/pack", "crates/server", "vendor/parser", "vendor/csgoproto"]
+resolver = "2"
+
+[profile.release]
+debug = false
+lto = "thin"
+
+# Upstream's parser/Cargo.toml set `[profile.dev] overflow-checks = false`. Member
+# profiles are ignored inside a workspace, so the setting moves here, scoped to the
+# vendored crate only (our own crates keep overflow checks in debug builds).
+[profile.dev.package.parser]
+overflow-checks = false

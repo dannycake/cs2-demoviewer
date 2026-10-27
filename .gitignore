@@ -1,0 +1,15 @@
+.playwright-mcp/
+assets/
+node_modules/
+target/
+dist/
+server/target/
+server/data/
+server/vendor/parser/test_demo.dem
+web/node_modules/
+web/dist/
+web/test-results/
+web/e2e/out/
+*.tsbuildinfo
+# gcbot's env file, with the Steam refresh token in it (gcbot/gcbot.env.example is the template).
+gcbot/gcbot.env
