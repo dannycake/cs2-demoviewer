@@ -1,0 +1,211 @@
+.scrubber {
+  --track-h: 4px;
+  --thumb: 10px;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 120px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  /* A finger drags the thumb: the browser neither scrolls nor zooms the page under it. */
+  touch-action: none;
+}
+
+/* The thumb's centre runs from thumb/2 to 100% - thumb/2: the track is inset to match. */
+.track {
+  position: absolute;
+  left: calc(var(--thumb) / 2);
+  right: calc(var(--thumb) / 2);
+  top: 50%;
+  height: var(--track-h);
+  transform: translateY(-50%);
+  background: var(--line);
+  overflow: visible;
+}
+
+.freeze {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--freeze);
+  background: var(--surface-2);
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--pos);
+  background: var(--brand);
+}
+
+.marker {
+  position: absolute;
+  left: var(--freeze);
+  top: -4px;
+  bottom: -4px;
+  width: 1px;
+  background: var(--text-mute);
+}
+
+.input {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.input:disabled {
+  cursor: default;
+}
+
+.input::-webkit-slider-runnable-track {
+  height: var(--track-h);
+  background: transparent;
+}
+
+.input::-moz-range-track {
+  height: var(--track-h);
+  background: transparent;
+}
+
+.input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: var(--thumb);
+  height: var(--thumb);
+  margin-top: calc((var(--track-h) - var(--thumb)) / 2);
+  border-radius: 2px;
+  background: var(--text);
+  border: 0;
+}
+
+.input::-moz-range-thumb {
+  width: var(--thumb);
+  height: var(--thumb);
+  border-radius: 2px;
+  background: var(--text);
+  border: 0;
+}
+
+.input:disabled::-webkit-slider-thumb {
+  visibility: hidden;
+}
+
+.input:disabled::-moz-range-thumb {
+  visibility: hidden;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.input:focus-visible::-webkit-slider-thumb {
+  outline: 1px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.input:focus-visible::-moz-range-thumb {
+  outline: 1px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* The round's events along the track: kills above it as diamonds in the killer's colour (the
+   followed player's death in red), plant and defuse on it, grenades below it as thin ticks. */
+.events {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.event {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  --team: var(--text-dim);
+}
+
+.event[data-team='2'] {
+  --team: var(--t);
+}
+
+.event[data-team='3'] {
+  --team: var(--ct);
+}
+
+.event[data-kind='kill'],
+.event[data-kind='death'] {
+  top: -9px;
+  transform: rotate(45deg);
+  border-radius: 1px;
+  background: var(--team);
+}
+
+.event[data-kind='death'] {
+  background: #ff5f52;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.event[data-kind='plant'],
+.event[data-kind='defuse'] {
+  top: -1px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 2px;
+  background: #ff5f52;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.event[data-kind='defuse'] {
+  background: var(--ct);
+}
+
+.event[data-kind='smoke'],
+.event[data-kind='flash'],
+.event[data-kind='he'],
+.event[data-kind='fire'] {
+  top: calc(100% + 3px);
+  width: 2px;
+  height: 5px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: #c8ced6;
+  opacity: 0.8;
+}
+
+.event[data-kind='flash'] {
+  background: #fff6c8;
+}
+
+.event[data-kind='he'] {
+  background: #ff6a4a;
+}
+
+.event[data-kind='fire'] {
+  background: #ff9a3a;
+}
+
+/* After the round is decided the game runs on to the next round's start: that stretch is
+   shaded, from the round's end mark. */
+.roundEnd {
+  position: absolute;
+  left: var(--end);
+  right: 0;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--text-mute);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Narrow (state/device): a row of its own above the transport's controls, 44 px high, with a
+   thumb a finger can find. */
+[data-narrow='true'] .scrubber {
+  --thumb: 16px;
+  order: -1;
+  flex: 1 0 100%;
+  height: 44px;
+}

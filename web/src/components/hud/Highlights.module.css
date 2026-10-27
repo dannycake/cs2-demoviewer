@@ -1,0 +1,180 @@
+/* The highlights panel: the settings popover's surface, hung under the camera row at the
+   right, in em of --hud-size like the rest of the HUD. Its list of rounds scrolls; each row
+   carries its player's team on the left edge, as the player list's rows do. */
+
+.panel {
+  position: absolute;
+  top: calc(100% + 0.5em);
+  right: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8em;
+  width: 30em;
+  max-width: calc(100vw - 2 * var(--space-3));
+  /* Clear of the player card at the bottom right on a tall screen. */
+  max-height: min(
+    50em,
+    calc(
+      100vh - var(--transport-height, 52px) - var(--strip-height, 24px) - 7em
+    )
+  );
+  padding: 0.9em 0.5em 0.6em 1em;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-overlay);
+  font-family: var(--font-family-sans);
+  font-size: calc(var(--hud-size, 14px) * 0.8);
+  color: var(--text);
+  pointer-events: auto;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  padding-right: 0.5em;
+}
+
+.title {
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  color: var(--text-dim);
+  text-transform: lowercase;
+  cursor: pointer;
+}
+
+.empty {
+  color: var(--text-dim);
+  text-transform: lowercase;
+}
+
+/* Positioned, so a group's offsetTop is its place in the list. */
+.list {
+  position: relative;
+  display: grid;
+  gap: 0.9em;
+  min-height: 0;
+  padding-right: 0.5em;
+  overflow-y: auto;
+}
+
+.groupHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1em;
+  margin-bottom: 0.3em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--line);
+}
+
+.round {
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+  color: var(--text-mute);
+}
+
+/* The round being played: the system's brand mark, as the scoreboard marks who is followed. */
+.group[data-current='true'] .round {
+  color: var(--brand);
+}
+
+.playAll {
+  padding: 0.1em 0.4em;
+  border: 0;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  text-transform: lowercase;
+  cursor: pointer;
+  transition:
+    background var(--ease),
+    color var(--ease);
+}
+
+.playAll:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.playAll:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.rows {
+  display: grid;
+  gap: 0.15em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  --team: var(--text-mute);
+  display: grid;
+  grid-template-columns: 3.2em minmax(0, 9.5em) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.7em;
+  width: 100%;
+  padding: 0.3em 0.5em;
+  border: 0;
+  border-left: 0.2em solid var(--team);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ease);
+}
+
+.row[data-team='2'] {
+  --team: var(--t);
+}
+
+.row[data-team='3'] {
+  --team: var(--ct);
+}
+
+.row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.playAll:focus-visible,
+.row:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.clock {
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--team);
+}
+
+/* A highlight of several kinds wraps rather than losing the last of them. */
+.label {
+  overflow-wrap: anywhere;
+}
+
+/* A plain opening kill: listed, not in the reel. */
+.row[data-reel='false'] .label {
+  color: var(--text-dim);
+}

@@ -1,0 +1,191 @@
+/* The round summary under the round bar: the reel banner's dark surface with hairline edges
+   and one radius, in em of --hud-size like the rest of the HUD. Labels are lower case and
+   tracked; each side's rows carry its colour on the left edge, as the highlights panel's do;
+   the MVP takes the system's brand mark; money is the player card's green. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+  max-width: min(46em, calc(100vw - 2 * var(--space-3)));
+  padding: 0.6em 0.8em 0.7em;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.9);
+  box-shadow: var(--shadow-overlay);
+  font-family: var(--font-family-sans);
+  font-size: calc(var(--hud-size, 14px) * 0.8);
+  color: var(--text);
+  pointer-events: auto;
+  user-select: none;
+}
+
+.panel [data-team='2'] {
+  --team: var(--t);
+}
+
+.panel [data-team='3'] {
+  --team: var(--ct);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7em;
+}
+
+.round {
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+  color: var(--text-mute);
+}
+
+.result {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--team, var(--text));
+}
+
+.reason {
+  color: var(--text-dim);
+  text-transform: lowercase;
+}
+
+.close {
+  align-self: center;
+  display: inline-flex;
+  margin-left: auto;
+  padding: 0.25em;
+  border: 0;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--text-mute);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background var(--ease),
+    color var(--ease);
+}
+
+.close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.close:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.mvp {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  min-width: 0;
+  margin: 0;
+}
+
+.mvpLabel,
+.tag {
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+  color: var(--brand);
+}
+
+.mvpName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--team);
+}
+
+.why {
+  flex: none;
+  color: var(--text-dim);
+}
+
+/* A narrow screen scrolls the table rather than the page. */
+.body {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 0.22em 0.55em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table thead th {
+  font-size: 0.85em;
+  font-weight: 400;
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+  color: var(--text-mute);
+}
+
+.table thead th:first-child,
+.table th.nextHead {
+  text-align: left;
+}
+
+/* The losing side under the winners, past a hairline. */
+.table tbody + tbody tr:first-child > * {
+  border-top: 1px solid var(--line);
+}
+
+.table th.name {
+  border-left: 0.2em solid var(--team);
+  font-weight: 500;
+  text-align: left;
+}
+
+.nameText {
+  display: inline-block;
+  max-width: 11em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+/* Dead at the round's end. */
+tr[data-alive='false'] .nameText {
+  color: var(--text-mute);
+}
+
+.tag {
+  margin-left: 0.5em;
+  font-size: 0.85em;
+}
+
+.money {
+  color: #8fd48f;
+}
+
+.table td.buys {
+  text-align: left;
+}
+
+.icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  vertical-align: middle;
+}
+
+/* Narrow (state/device): bounded by the space the view gives it, the table scrolls inside. */
+[data-narrow='true'] .panel {
+  min-height: 0;
+}
+
+[data-narrow='true'] .body {
+  min-height: 0;
+  overflow: auto;
+}

@@ -1,0 +1,44 @@
+/* The source link: muted chrome, lowercase by CSS (the DOM keeps its words), brighter with
+   the brand underline when pointed at, as the page's other links. Keyboard focus is the
+   system's outline (styles/tokens.css). */
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  width: max-content;
+  max-width: 100%;
+  color: var(--text-mute);
+  text-decoration: none;
+  text-transform: lowercase;
+  transition: color var(--ease);
+}
+
+.link:hover,
+.link:focus-visible {
+  color: var(--text);
+}
+
+.mark {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.text {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--ease);
+}
+
+.link:hover .text,
+.link:focus-visible .text {
+  text-decoration-color: var(--brand);
+}
+
+/* A finger needs a taller row than the words, as the settings' toggles have. */
+@media (pointer: coarse) {
+  .link {
+    min-height: 2.6em;
+  }
+}

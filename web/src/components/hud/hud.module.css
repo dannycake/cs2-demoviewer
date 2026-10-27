@@ -1,0 +1,936 @@
+/* The playback HUD. Every block sizes in em from --hud-size (DemoView sets it from the
+   viewport width); team colour comes in as --team from data-team. Panels are the gamw
+   system's surface, nearly opaque, with hairline edges and one radius; the round bar's score
+   blocks are the one solid colour on screen. */
+
+.roundBar,
+.killfeed,
+.roundFeed,
+.card,
+.killcam,
+.strip,
+.scoreboard,
+.brand {
+  font-family: var(--font-family-sans);
+  font-size: var(--hud-size, 14px);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  pointer-events: auto;
+}
+
+[data-team='2'] {
+  --team: var(--t);
+}
+
+[data-team='3'] {
+  --team: var(--ct);
+}
+
+/* ------------------------------------------------------------ round bar */
+
+.roundBar {
+  display: flex;
+  align-items: stretch;
+  user-select: none;
+}
+
+.score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  min-width: 4.4em;
+  padding: 0.3em 0.9em 0.45em;
+  background: var(--team);
+  color: #000;
+}
+
+.score[data-team='3'] {
+  border-radius: var(--r) 0 0 var(--r);
+}
+
+.score[data-team='2'] {
+  border-radius: 0 var(--r) var(--r) 0;
+}
+
+.scoreNum {
+  font-size: 1.85em;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pips {
+  display: flex;
+  gap: 0.22em;
+}
+
+.pips i {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.85);
+}
+
+.pips i[data-alive='false'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 0.11em rgba(9, 8, 6, 0.55);
+}
+
+.clock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 7.2em;
+  padding: 0.25em 1em 0.35em;
+  background: rgba(9, 8, 6, 0.94);
+  border-block: 1px solid var(--color-border-light);
+}
+
+.time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 1.6em;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock[data-phase='freeze'] .time {
+  color: var(--color-text-secondary);
+}
+
+.clock[data-phase='planted'] .time {
+  color: #ff5f52;
+}
+
+.clock[data-phase='over'] .time {
+  font-size: 1em;
+  color: var(--color-text-secondary);
+}
+
+.clockBomb {
+  font-size: 0.8em;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.clockMeta {
+  display: flex;
+  gap: 0.6em;
+  margin-top: 0.15em;
+  font-size: 0.7em;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  text-transform: lowercase;
+}
+
+.half {
+  color: var(--color-text-muted);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ------------------------------------------------------------ killfeed */
+
+.killfeed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+/* A row is a button: a click plays its kill cam. */
+.kill {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.28em 0.6em;
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.86);
+  border: 1px solid transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.85em;
+  font-weight: inherit;
+  line-height: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: slide-in 0.18s ease-out;
+}
+
+.kill:hover {
+  border-color: var(--color-text-muted);
+}
+
+.kill:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.kill[data-mine='true'] {
+  border-color: var(--brand);
+  background: rgba(30, 16, 54, 0.78);
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(1.5em);
+    opacity: 0;
+  }
+}
+
+.name {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--team, var(--color-text-secondary));
+  font-weight: 500;
+}
+
+.assist {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  color: var(--color-text-muted);
+}
+
+.assist .name {
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.badge {
+  display: inline-flex;
+  color: var(--color-text-primary);
+}
+
+.badge[data-badge='headshot'] {
+  color: #ffffff;
+}
+
+.weapon {
+  display: inline-block;
+  flex: none;
+  opacity: 0.95;
+}
+
+.weaponText {
+  color: var(--color-text-secondary);
+  font-size: 0.85em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kill,
+  .clockBomb {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------ round feed */
+
+.roundFeed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.feedRow {
+  max-width: 26em;
+  padding: 0.2em 0.6em;
+  border-right: 0.18em solid var(--team, var(--color-border-light));
+  border-radius: var(--r) 0 0 var(--r);
+  background: rgba(9, 8, 6, 0.74);
+  font-size: 0.78em;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feedRow[data-kind='plant'],
+.feedRow[data-kind='defused'],
+.feedRow[data-kind='exploded'] {
+  color: var(--color-text-primary);
+}
+
+/* ------------------------------------------------------------ player card */
+
+/* The card, and over it, while the followed player is dead, their kill cam. */
+.cardStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4em;
+}
+
+.killcam {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  height: 2.1em;
+  padding: 0 0.8em;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.86);
+  color: var(--color-text-secondary);
+  font-size: calc(var(--hud-size, 14px) * 0.85);
+  text-transform: lowercase;
+  cursor: pointer;
+  transition:
+    border-color var(--ease),
+    color var(--ease);
+}
+
+.killcam:hover {
+  border-color: var(--brand);
+  color: var(--color-text-primary);
+}
+
+.killcam:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.killcamKey {
+  font-family: inherit;
+  font-size: 0.85em;
+  color: var(--color-text-muted);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  width: 17em;
+  padding: 0.6em 0.75em 0.55em;
+  border: 1px solid var(--color-border-light);
+  border-left: 0.25em solid var(--team);
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.86);
+  text-align: left;
+  cursor: pointer;
+}
+
+.card:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.card[data-alive='false'] {
+  opacity: 0.7;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6em;
+}
+
+.cardName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--team);
+}
+
+.money {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #8fd48f;
+}
+
+.vitals {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+}
+
+.hp {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.hpNum {
+  min-width: 1.8em;
+  font-size: 1.35em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hpBar {
+  flex: 1 1 auto;
+  height: 0.35em;
+  border-radius: var(--r);
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.hpBar i {
+  display: block;
+  height: 100%;
+  background: var(--color-text-primary);
+}
+
+.hpBar i[data-low='true'] {
+  background: #ff5f52;
+}
+
+.armor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.hand {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+  min-height: 1.6em;
+}
+
+.handName {
+  flex: 1 1 auto;
+  font-size: 0.85em;
+  color: var(--color-text-secondary);
+}
+
+.ammo {
+  font-size: 1.1em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.nades {
+  display: flex;
+  gap: 0.4em;
+  opacity: 0.85;
+}
+
+.deadNote {
+  color: var(--color-text-muted);
+}
+
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35em;
+  font-size: 0.75em;
+}
+
+.kd {
+  margin-right: auto;
+  color: var(--color-text-muted);
+}
+
+.tag {
+  padding: 0.05em 0.45em;
+  border-radius: var(--r);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+}
+
+.tag[data-tag='Bomb'] {
+  background: rgba(255, 95, 82, 0.2);
+  color: #ffb0a8;
+}
+
+/* ------------------------------------------------------------ round strip */
+
+.strip {
+  display: flex;
+  justify-content: center;
+  gap: 0.15em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: calc(var(--hud-size, 14px) * 0.8);
+}
+
+.strip li[data-half='true'] {
+  margin-left: 0.7em;
+}
+
+.cell {
+  display: grid;
+  place-items: center;
+  width: 1.5em;
+  height: 1.5em;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.74);
+  color: rgba(9, 8, 6, 0.9);
+  font: inherit;
+  font-size: 1em;
+  cursor: pointer;
+}
+
+.cell[data-winner='2'] {
+  background: var(--t);
+}
+
+.cell[data-winner='3'] {
+  background: var(--ct);
+}
+
+.cell[aria-current='true'] {
+  outline: 2px solid #ffffff;
+  outline-offset: 1px;
+}
+
+.cell:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 1px;
+}
+
+/* ------------------------------------------------------------ scoreboard */
+
+.scoreboard {
+  display: grid;
+  gap: 1em;
+  width: min(62em, calc(100vw - 2em));
+  padding: 1em 1.2em;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.94);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.table caption {
+  caption-side: top;
+  text-align: left;
+}
+
+.caption {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  padding-bottom: 0.35em;
+  border-bottom: 2px solid var(--team);
+  font-weight: 400;
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+  color: var(--text-mute);
+}
+
+.teamScore {
+  font-size: 1.5em;
+  color: var(--team);
+}
+
+.table th,
+.table td {
+  padding: 0.3em 0.4em;
+  text-align: right;
+}
+
+.table thead th {
+  font-size: 0.75em;
+  font-weight: 400;
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+  color: var(--text-mute);
+}
+
+.table th[scope='row'],
+.table thead th:first-child {
+  text-align: left;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table tbody tr:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.table tr[data-followed='true'] th {
+  color: var(--brand);
+}
+
+.table td[data-sign='1'] {
+  color: #8fd48f;
+}
+
+.table td[data-sign='-1'] {
+  color: #ff8f86;
+}
+
+.profile {
+  color: inherit;
+  text-decoration: none;
+}
+
+.profile:hover,
+.profile:focus-visible {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------ brand */
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  pointer-events: none;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  width: max-content;
+  font-weight: 700;
+  font-size: 0.95em;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.wordmark img {
+  width: 1.6em;
+  height: auto;
+}
+
+.match {
+  display: flex;
+  gap: 0.5em;
+  align-items: baseline;
+  font-size: 0.75em;
+}
+
+.mapName {
+  font-weight: 600;
+}
+
+.place {
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------ settings */
+
+.settings {
+  position: relative;
+  font-family: var(--font-family-sans);
+  font-size: var(--hud-size, 14px);
+  pointer-events: auto;
+}
+
+.gear {
+  display: grid;
+  place-items: center;
+  width: 2.1em;
+  height: 2.1em;
+  padding: 0;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.86);
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.gear:hover,
+.gear[aria-expanded='true'] {
+  color: var(--color-text-primary);
+}
+
+.gear:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 0.5em);
+  right: 0;
+  z-index: 6;
+  display: grid;
+  gap: 0.9em;
+  width: 27em;
+  padding: 0.9em 1em;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-overlay);
+  font-size: 0.8em;
+  color: var(--text);
+}
+
+.fields {
+  display: grid;
+  gap: 0.45em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  text-transform: lowercase;
+}
+
+.fields legend {
+  margin-bottom: 0.4em;
+  font-weight: 400;
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+  color: var(--text-mute);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+}
+
+.toggle input,
+.scale {
+  display: grid;
+  gap: 0.35em;
+  color: var(--text-dim);
+  text-transform: lowercase;
+}
+
+.scale input:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.keys {
+  display: grid;
+  gap: 0.3em;
+  margin: 0;
+  padding-top: 0.7em;
+  border-top: 1px solid var(--color-border);
+}
+
+.keys div {
+  display: grid;
+  grid-template-columns: 6em 1fr;
+  gap: 0.5em;
+  align-items: baseline;
+}
+
+.keys dd {
+  margin: 0;
+  color: var(--text-dim);
+  text-transform: lowercase;
+}
+
+.keys kbd {
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+/* The panel's foot: the source link under a hairline, as the keys are. */
+.foot {
+  padding-top: 0.7em;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ------------------------------------------------------------ first person */
+
+.crosshair {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* The scope's lens: the view through a circle nearly the screen's height, black around it,
+   with two thin lines through the centre. Our own drawing, no game art. */
+.scope {
+  --lens: 46vmin;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle var(--lens) at 50% 50%,
+    transparent calc(100% - 3px),
+    rgba(0, 0, 0, 0.55) calc(100% - 1px),
+    #000 100%
+  );
+}
+
+.scope::before,
+.scope::after {
+  content: '';
+  position: absolute;
+  background: #000;
+}
+
+.scope::before {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+}
+
+.scope::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+}
+
+.whiteout {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  pointer-events: none;
+}
+
+.cash {
+  color: #8fd48f;
+}
+
+.table th.kitHead,
+.table td.kit {
+  text-align: left;
+}
+
+.kitIcons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  vertical-align: middle;
+}
+
+/* The same column widths in both teams' tables, so they line up. */
+.table {
+  table-layout: fixed;
+}
+
+.table thead th:first-child {
+  width: 19%;
+}
+
+.table th.stat {
+  width: 4.5%;
+}
+
+.table th.stat[data-col='Rating'] {
+  width: 6.5%;
+}
+
+.table th.moneyHead {
+  width: 9%;
+}
+
+/* ------------------------------------------------------------ narrow (state/device) */
+
+/* The compact card: name and money, health and armour, the weapon and its magazine. */
+.card[data-compact='true'] {
+  gap: 0.25em;
+  width: 12.5em;
+  padding: 0.45em 0.6em 0.5em;
+}
+
+.card[data-compact='true'] .hpNum {
+  font-size: 1.15em;
+}
+
+.card[data-compact='true'] .ammo {
+  margin-left: auto;
+}
+
+/* Every round's cell fits the width: they close up rather than run off the screen. */
+[data-narrow='true'] .strip {
+  max-width: calc(100vw - 2 * var(--space-2));
+}
+
+[data-narrow='true'] .strip li {
+  flex: 0 1 1.5em;
+  min-width: 0;
+}
+
+[data-narrow='true'] .cell {
+  width: 100%;
+}
+
+/* The compact scoreboard: the name, then kills, deaths, ADR and rating; it scrolls rather than
+   leave the screen. */
+.scoreboard[data-columns='compact'] {
+  width: min(30em, calc(100vw - 2em));
+  max-height: calc(100vh - 2em);
+  max-height: calc(100dvh - 2em);
+  overflow-y: auto;
+}
+
+.scoreboard[data-columns='compact'] .table thead th:first-child {
+  width: auto;
+}
+
+.scoreboard[data-columns='compact'] .table th.stat {
+  width: 3.2em;
+}
+
+.scoreboard[data-columns='compact'] .table th.stat[data-col='Rating'] {
+  width: 4.2em;
+}
+
+/* The settings hang from the camera row's right edge, as its other panels do, within the
+   screen, and scroll on a short one; the gear is as tall as the camera bar beside it. */
+[data-narrow='true'] .settings {
+  position: static;
+}
+
+[data-narrow='true'] .gear {
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  font-size: var(--fs-body);
+}
+
+[data-narrow='true'] .killcamKey {
+  display: none;
+}
+
+[data-narrow='true'] .panel {
+  max-width: calc(100vw - 2 * var(--space-2));
+  max-height: calc(100vh - var(--ctl-h) - 4 * var(--space-2));
+  max-height: calc(100dvh - var(--ctl-h) - 4 * var(--space-2));
+  overflow-y: auto;
+}
+
+/* A finger has no keys to learn, and needs taller rows. */
+@media (pointer: coarse) {
+  .keys {
+    display: none;
+  }
+
+  .toggle {
+    min-height: 2.6em;
+  }
+}

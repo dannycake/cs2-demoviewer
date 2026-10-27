@@ -1,0 +1,74 @@
+/* Share, at the end of the camera bar (it takes the bar's button class), and the field that
+   shows the link when it cannot be copied: the settings popover's surface, hung under the bar
+   at the right. */
+
+.share {
+  position: relative;
+  display: flex;
+}
+
+/* Scoped under .share, so it outranks the bar's button colours whatever the CSS order. */
+.share .copied,
+.share .copied:hover:not(:disabled) {
+  color: var(--brand);
+}
+
+.label {
+  display: grid;
+  justify-items: center;
+}
+
+.label > span {
+  grid-area: 1 / 1;
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 0.5em);
+  right: 0;
+  z-index: 6;
+  display: grid;
+  gap: var(--gap-1);
+  width: 34em;
+  max-width: calc(100vw - 2 * var(--space-3));
+  padding: 0.9em 1em;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-overlay);
+  font-size: calc(var(--hud-size, 14px) * 0.8);
+  color: var(--text);
+}
+
+.title {
+  color: var(--text-mute);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+}
+
+.field {
+  width: 100%;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-dense);
+}
+
+/* Compact: the field hangs from the camera row (positioned) at its right edge, as the other
+   panels do, rather than from the glyph. */
+.share[data-compact='true'] {
+  position: static;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

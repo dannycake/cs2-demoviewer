@@ -1,0 +1,333 @@
+/* The gamw design system, from its reference page (2026-10-22): a dark-only operator console. One
+   monospace face, lowercase muted chrome, hairline lines, one 3 px radius, and orange only
+   for what is active, live or primary, never for decoration. The CS2 team colours stay: they
+   are the game's, not the interface's.
+
+   The names in the first block are the system's own. The second block maps the names of the
+   @skunk/ui copy this file replaced onto them, for code that still uses those. */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces and lines */
+  --ink: #000000; /* page ground */
+  --surface-1: #090806; /* panels, tables, inputs */
+  --surface-2: #0f0e0b; /* hover, raised */
+  --line: #211e1a; /* control borders */
+  --line-soft: #0c0b09; /* row separators, panel edges */
+
+  /* Text */
+  --text: #e6e8ef; /* data */
+  --text-dim: #9aa1b2; /* secondary data */
+  --text-mute: #6b7280; /* labels, chrome */
+
+  /* Accent: active, live, primary */
+  --brand: #ff7a1a;
+  --brand-dim: #a34c0b; /* ticks, quiet accents */
+  --on-brand: #1a0b00; /* text on a brand fill */
+  --brand-rgb: 255, 122, 26;
+
+  /* Semantic: never structure; a status is a dot plus a word */
+  --ok: #35d07f;
+  --warn: #ffc233;
+  --danger: #ff4d6a;
+  --info: #4da3ff;
+
+  /* CS2 team colours */
+  --t: #f2a33a;
+  --ct: #4da3ff;
+
+  /* Type: one face, six steps */
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+  --fs-title: 19px; /* 700: page titles */
+  --fs-section: 16px; /* 600: section headings */
+  --fs-body: 13px; /* 400: primary data */
+  --fs-dense: 12px; /* 400: secondary cells, footers */
+  --fs-label: 11px; /* 400, tracked: column headers, labels; never bold */
+  --fs-micro: 10.5px; /* 500: status words */
+  --track-label: 0.05em;
+
+  /* Shape and density */
+  --r: 3px;
+  --ctl-h: 30px; /* inputs, selects, buttons, chips in a row */
+  --ctl-h-compact: 24px; /* inside tables and panels */
+  --chip-h: 22px;
+  --row-h: 34px;
+  --pad-1: 6px 8px;
+  --pad-2: 9px 11px;
+  --pad-3: 13px 15px;
+  --pad-4: 18px 20px;
+  --gap-1: 6px;
+  --gap-2: 10px;
+  --gap-3: 14px;
+  --gap-4: 20px;
+  --ease: 120ms ease;
+  /* Shadows only under overlays (menus, sheets). */
+  --shadow-overlay: 0 10px 30px rgba(0, 0, 0, 0.7);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --ctl-h: 36px;
+  }
+}
+
+/* The @skunk/ui names, mapped onto the system. */
+:root {
+  --brand-primary: var(--brand);
+  --brand-primary-light: var(--brand);
+  --brand-primary-dark: var(--brand-dim);
+  --brand-primary-subtle: var(--surface-2);
+
+  --color-bg-primary: var(--ink);
+  --color-bg-secondary: var(--surface-1);
+  --color-bg-tertiary: var(--surface-1);
+  --color-bg-card: var(--surface-1);
+  --color-bg-hover: var(--surface-2);
+  --color-border: var(--line-soft);
+  --color-border-light: var(--line);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--text-dim);
+  --color-text-muted: var(--text-mute);
+  --color-accent-primary: var(--brand);
+  --color-accent-secondary: var(--brand);
+  --color-accent-hover: var(--brand);
+  --color-success: var(--ok);
+  --color-warning: var(--warn);
+  --color-error: var(--danger);
+  --color-info: var(--info);
+
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --radius-sm: var(--r);
+  --radius-md: var(--r);
+  --radius-lg: var(--r);
+  --radius-full: 9999px; /* dots only */
+
+  --transition-fast: var(--ease);
+  --transition-normal: var(--ease);
+  --shadow-sm: none;
+  --shadow-lg: var(--shadow-overlay);
+
+  --font-family-mono: var(--mono);
+  --font-family-sans: var(--mono);
+  --font-size-xs: var(--fs-label);
+  --font-size-sm: var(--fs-dense);
+  --font-size-lg: var(--fs-section);
+  --font-size-3xl: var(--fs-title);
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.6;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--mono);
+  font-size: var(--fs-body);
+  background-color: var(--ink);
+  color: var(--text);
+  line-height: var(--line-height-normal);
+  min-height: 100vh;
+  font-variant-numeric: tabular-nums;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
+textarea,
+select {
+  height: var(--ctl-h);
+  padding: 0 var(--space-2);
+  background-color: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font: inherit;
+  font-size: var(--fs-body);
+  transition: border-color var(--ease);
+}
+
+textarea {
+  height: auto;
+  padding: var(--pad-1);
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-mute);
+}
+
+/* Selects draw their own caret so they match the inputs beside them. */
+select {
+  appearance: none;
+  padding-right: 24px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-mute) 50%),
+    linear-gradient(135deg, var(--text-mute) 50%, transparent 50%);
+  background-position:
+    calc(100% - 13px) 50%,
+    calc(100% - 9px) 50%;
+  background-size:
+    4px 4px,
+    4px 4px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+/* Checkboxes: a hairline square, filled with the brand when on. */
+input[type='checkbox'] {
+  appearance: none;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-1);
+  cursor: pointer;
+  transition:
+    background var(--ease),
+    border-color var(--ease);
+}
+
+input[type='checkbox']:checked {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+
+/* Ranges: a hairline track, the brand up to the value, a small square thumb. */
+input[type='range'] {
+  appearance: none;
+  height: 14px;
+  background: transparent;
+  cursor: pointer;
+  --fill: 50%;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--brand) var(--fill), var(--line) var(--fill));
+}
+
+input[type='range']::-moz-range-track {
+  height: 2px;
+  background: var(--line);
+}
+
+input[type='range']::-moz-range-progress {
+  height: 2px;
+  background: var(--brand);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -4px;
+  border-radius: 2px;
+  background: var(--text);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--text);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--text-dim);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+  transition:
+    color var(--ease),
+    text-decoration-color var(--ease);
+}
+
+a:hover {
+  color: var(--text);
+  text-decoration-color: var(--brand);
+}
+
+::selection {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ink);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: var(--r);
+}
+
+:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

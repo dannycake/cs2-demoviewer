@@ -1,0 +1,88 @@
+/* Camera tabs: the active one carries the system's record tick, a 2 px brand edge below it. */
+.bar {
+  display: flex;
+  height: var(--ctl-h);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  background: rgba(9, 8, 6, 0.9);
+  pointer-events: auto;
+}
+
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-1);
+  padding: 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--text-mute);
+  font-size: var(--fs-body);
+  text-transform: lowercase;
+  cursor: pointer;
+  transition:
+    background var(--ease),
+    color var(--ease);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.button[aria-pressed='true'] {
+  color: var(--text);
+}
+
+.button[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--brand);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.button:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: -1px;
+}
+
+.divider {
+  width: 1px;
+  background: var(--line-soft);
+}
+
+.key {
+  font-family: inherit;
+  font-size: var(--fs-label);
+  color: var(--text-mute);
+  text-transform: lowercase;
+}
+
+/* Compact (the narrow layout): closer buttons, without their keys, in the screen's width. */
+.bar[data-compact='true'] {
+  max-width: 100%;
+}
+
+.bar[data-compact='true'] .button {
+  justify-content: center;
+  min-width: 2.5em;
+  padding: 0 0.55em;
+  font-size: var(--fs-dense);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

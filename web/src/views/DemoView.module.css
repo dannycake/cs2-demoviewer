@@ -1,0 +1,331 @@
+.view {
+  --transport-height: 52px;
+  /* The playback HUD's base size, in step with the viewport width (components/hud). */
+  --hud-size: calc(clamp(12px, 0.9vw, 20px) * var(--hud-scale, 1));
+  --strip-height: calc(var(--hud-size) * 1.6);
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+}
+
+.left {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  bottom: calc(var(--transport-height) + var(--strip-height) + var(--space-3));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: 0;
+  pointer-events: none;
+}
+
+/* The player list (last, after the minimap and the brand) is the one block that gives way
+   when the column runs out of height: it scrolls. */
+.left > :last-child {
+  min-height: 0;
+}
+
+.pov {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Top centre: the round bar, and under it the banner while a reel plays, or the round's
+   summary at its end (never both: the summary hides during a reel). */
+.top {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+/* Bottom right: the round feed, and under it the followed player's card. */
+.feed {
+  position: absolute;
+  right: var(--space-3);
+  bottom: calc(var(--transport-height) + var(--strip-height) + var(--space-3));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+  pointer-events: none;
+}
+
+.strip {
+  display: flex;
+  justify-content: center;
+  height: var(--strip-height);
+  align-items: flex-end;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.strip > * {
+  pointer-events: auto;
+}
+
+.scoreboard {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+}
+
+.camera {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+  pointer-events: none;
+}
+
+.camera > * {
+  pointer-events: auto;
+}
+
+/* Positioned: the highlights panel hangs under it. */
+.cameraRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.transport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* The note a failed 3D view, full radar or first-person overlay leaves (ErrorBoundary), in the
+   middle of where it was. */
+.viewNote {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0 0 var(--transport-height) 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 280px;
+  max-width: min(520px, calc(100vw - 2 * var(--space-4)));
+  padding: var(--pad-4);
+  border-radius: var(--r);
+  background: var(--surface-1);
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-overlay);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.panelTitle {
+  color: var(--text);
+  text-transform: lowercase;
+}
+
+.panelText {
+  color: var(--text-dim);
+  font-size: var(--fs-dense);
+  overflow-wrap: anywhere;
+}
+
+.link {
+  margin-top: var(--space-2);
+  font-size: var(--fs-dense);
+  text-transform: lowercase;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.actions .link {
+  margin-top: 0;
+}
+
+.button {
+  height: var(--ctl-h);
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: var(--r);
+  background: var(--brand);
+  color: var(--on-brand);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-transform: lowercase;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: #ff8c3a;
+}
+
+.button:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Pending, as the system shows it: a muted ellipsis that fills in, no spinner, no shimmer. */
+.spinner {
+  height: 1.5em;
+  color: var(--text-mute);
+}
+
+.spinner::after {
+  content: '...';
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: dots 1.2s steps(4) infinite;
+}
+
+.progress {
+  width: 100%;
+  height: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width var(--ease);
+}
+
+@keyframes dots {
+  to {
+    width: 4ch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner::after {
+    width: 3ch;
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------ narrow (state/device) */
+
+/* The camera row has the top right to itself, within the screen. */
+.view[data-narrow='true'] .camera {
+  top: var(--space-2);
+  left: var(--space-2);
+  right: var(--space-2);
+}
+
+/* Held upright, the round bar, a reel's banner and the summary go under the camera row,
+   across the screen and down to the bottom HUD: the summary gives way and scrolls. */
+.view[data-narrow='true'] .top {
+  top: calc(2 * var(--space-2) + var(--ctl-h));
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: calc(var(--transport-height) + var(--strip-height) + var(--space-2));
+  transform: none;
+}
+
+.view[data-narrow='true'] .top > * {
+  min-height: 0;
+  max-width: 100%;
+}
+
+/* On its side, they go to the top left, clear of the killfeed on the right and of the
+   "Players" button under them. */
+@media (orientation: landscape) {
+  .view[data-narrow='true'] .top {
+    top: var(--space-2);
+    right: 45%;
+    bottom: calc(
+      var(--transport-height) + var(--strip-height) + var(--ctl-h) + 2 *
+        var(--space-2)
+    );
+    align-items: flex-start;
+  }
+}
+
+/* The brand and the "Players" button at the bottom left. */
+.view[data-narrow='true'] .left {
+  top: auto;
+  left: var(--space-2);
+  bottom: calc(var(--transport-height) + var(--strip-height) + var(--space-2));
+  max-width: calc(50% - var(--space-2));
+}
+
+/* The killfeed over the compact card at the bottom right. */
+.view[data-narrow='true'] .feed {
+  right: var(--space-2);
+  bottom: calc(var(--transport-height) + var(--strip-height) + var(--space-2));
+  max-width: calc(100% - 2 * var(--space-2));
+}
+
+/* The 3D view's chunk on its way: a note where the view's own notes go, in their look
+   (Viewport.module.css's .banners and .note, which come with the chunk). */
+.viewLoading {
+  position: absolute;
+  top: calc(var(--space-4) + var(--hud-size, 14px) * 5.5);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--gap-1);
+  padding: var(--pad-1);
+  border-radius: var(--r);
+  font-size: var(--fs-dense);
+  color: var(--text-dim);
+  background: rgba(9, 8, 6, 0.94);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--line);
+  text-transform: lowercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.viewLoading::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-mute);
+  /* tokens.css's keyframes: a bare name here would be made this module's own. */
+  animation: global(pulse) 1.2s ease-in-out infinite;
+}
+
+@media (max-width: 900px) {
+  .viewLoading {
+    top: calc(var(--space-4) + var(--hud-size, 14px) * 5.5 + 44px);
+  }
+}

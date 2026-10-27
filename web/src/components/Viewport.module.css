@@ -1,0 +1,92 @@
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--ink);
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* The empty scene of a map without assets: a floor grid so the view does not read as broken. */
+.grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size:
+    160px 160px,
+    160px 160px,
+    32px 32px,
+    32px 32px;
+  background-position: center;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+}
+
+/* Below the HUD's round bar, which is about 4.5em of --hud-size tall. */
+.banners {
+  position: absolute;
+  top: calc(var(--space-4) + var(--hud-size, 14px) * 5.5);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+  max-width: min(640px, calc(100% - 2 * var(--space-4)));
+}
+
+/* A notice is a status: a dot and the words, on a panel with a left edge. */
+.banner,
+.note {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-1);
+  padding: var(--pad-1);
+  border-radius: var(--r);
+  font-size: var(--fs-dense);
+  background: rgba(9, 8, 6, 0.94);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--warn);
+  text-transform: lowercase;
+}
+
+.banner::before,
+.note::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.banner {
+  color: var(--text);
+}
+
+.note {
+  color: var(--text-dim);
+  border-left-color: var(--line);
+}
+
+.note::before {
+  background: var(--text-mute);
+  /* tokens.css's keyframes: a bare name here would be made this module's own. */
+  animation: global(pulse) 1.2s ease-in-out infinite;
+}
+
+@media (max-width: 900px) {
+  .banners {
+    top: calc(var(--space-4) + var(--hud-size, 14px) * 5.5 + 44px);
+  }
+}

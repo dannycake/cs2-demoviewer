@@ -1,0 +1,64 @@
+.screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 280px;
+  max-width: min(520px, calc(100vw - 2 * var(--space-4)));
+  padding: var(--pad-4);
+  border-radius: var(--r);
+  background: var(--surface-1);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--danger);
+  text-align: center;
+}
+
+.title {
+  color: var(--text);
+  text-transform: lowercase;
+}
+
+.text {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.link {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+/* A panel's failure: a quiet note in its place, in the look of the viewport's banners. */
+.note {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-1);
+  width: max-content;
+  max-width: 100%;
+  padding: var(--pad-1);
+  border-radius: var(--r);
+  font-size: var(--fs-dense);
+  color: var(--text-dim);
+  background: rgba(9, 8, 6, 0.94);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--warn);
+  text-transform: lowercase;
+  pointer-events: auto;
+}
+
+.note::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+}
