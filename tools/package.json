@@ -1,0 +1,40 @@
+{
+  "name": "demoviewer-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Asset pipeline: turns the local CS2 install into the gitignored assets/ tree the server serves",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "check:map": "node check-map.mjs",
+    "check:players": "node check-players.mjs",
+    "shrink:map": "node shrink-map.mjs",
+    "radar": "node radar.mjs",
+    "players:shrink": "node shrink-player.mjs",
+    "manifest": "node manifest.mjs",
+    "check:weapons": "node check-weapons.mjs",
+    "weapons:shrink": "node shrink-weapon.mjs",
+    "arms:shrink": "node shrink-arms.mjs",
+    "viewmodels:shrink": "node shrink-viewmodel-clips.mjs",
+    "check:viewmodels": "node check-viewmodels.mjs",
+    "effects:build": "node build-effects.mjs",
+    "check:effects": "node check-effects.mjs",
+    "sounds:build": "node build-sounds.mjs",
+    "check:sounds": "node check-sounds.mjs"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "meshoptimizer": "1.3.0",
+    "sharp": "0.35.5",
+    "three": "0.186.1",
+    "three-mesh-bvh": "0.9.1"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
+  }
+}

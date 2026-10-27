@@ -1,0 +1,127 @@
+<!doctype html><html><head><meta charset="utf-8"><title>glb spike</title>
+<style>body{margin:0;background:#0b0d10}canvas{display:block}#hud{position:fixed;left:8px;top:8px;color:#ddd;font:13px monospace}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.186.1/build/three.module.js","three/addons/":"https://unpkg.com/three@0.186.1/examples/jsm/"}}</script>
+</head><body><div id="hud">loading</div><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const q = new URLSearchParams(location.search); const file = q.get('f') || 'mirage_flat.glb'; const flat = q.get('flat') === '1';
+// lm=<image>: CS2's baked lightmap (M2a spike). MeshBasicMaterial with lightMap on uv1 (TEXCOORD_1),
+// lightMapIntensity = pi * lmscale (three divides the lightmap by pi), flipY only with flip=1.
+// lmsrgb=0 reads the image as linear data; base=0 drops the colour texture (white albedo);
+// unlm=<hex> paints primitives without a lightmap UV; lmnearest=1 samples texels unfiltered.
+// rgbm=<range>: the image is RGBM (rgb * a * range, linear; implies lmsrgb=0); lmbitmap=1 loads it as an
+// ImageBitmap with premultiplyAlpha 'none' instead of an <img>. lmf32=<file>&lmsize=<n>: a raw float32
+// RGB lightmap (bake.mjs) as a float DataTexture, the unquantized reference.
+const lmFile = q.get('lm') || q.get('lmf32');
+const rgbmRange = +(q.get('rgbm') || 0);
+const sqrtRange = +(q.get('lmsqrt') || 0);
+let lmTex = null;
+if (q.get('lmf32')) {
+  const n = +q.get('lmsize'), f = new Float32Array(await (await fetch(q.get('lmf32'))).arrayBuffer()), d = new Float32Array(n * n * 4);
+  for (let i = 0; i < n * n; i++) { d[4 * i] = f[3 * i]; d[4 * i + 1] = f[3 * i + 1]; d[4 * i + 2] = f[3 * i + 2]; d[4 * i + 3] = 1; }
+  lmTex = new THREE.DataTexture(d, n, n, THREE.RGBAFormat, THREE.FloatType);
+  lmTex.magFilter = THREE.LinearFilter; lmTex.minFilter = THREE.LinearMipmapLinearFilter; lmTex.generateMipmaps = true;
+} else if (lmFile && q.get('lmbitmap') === '1') {
+  const bmp = await new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }).loadAsync(lmFile);
+  lmTex = new THREE.Texture(bmp);
+} else if (lmFile) {
+  lmTex = await new THREE.TextureLoader().loadAsync(lmFile);
+}
+if (lmTex) {
+  lmTex.channel = 1; lmTex.flipY = q.get('flip') === '1';
+  lmTex.colorSpace = q.get('lmsrgb') === '0' || rgbmRange || sqrtRange || q.get('lmf32') ? THREE.NoColorSpace : THREE.SRGBColorSpace;
+  if (q.get('lmnearest') === '1') { lmTex.magFilter = THREE.NearestFilter; lmTex.minFilter = THREE.NearestFilter; lmTex.generateMipmaps = false; }
+  lmTex.needsUpdate = true;
+}
+const r = new THREE.WebGLRenderer({antialias:true}); r.setPixelRatio(1); r.toneMapping = q.get('tm') === '0' ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping; r.toneMappingExposure = +(q.get('exp')||0.9); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+// clipy=<metres>: cut away everything above that height (floor plans for placing cameras).
+if (q.get('clipy')) r.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), +q.get('clipy'))];
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0d10);
+if (q.get('hud') === '0') document.getElementById('hud').style.display = 'none';
+// bg=<hex>: sky colour as background and fog (production's fogNear 120 / fogFar 420).
+if (q.get('bg')) { scene.background = new THREE.Color('#' + q.get('bg')); scene.fog = new THREE.Fog(scene.background.getHex(), 120, 420); }
+// today=<map>: approximately production's medium preset (Task 1b's "today"): Lambert with smooth normals
+// and the AO in COLOR_0, the map's hemisphere + sun (lighting.ts, atmosphere.ts) with a 2048 shadow fitted
+// as Lighting.fit does, Neutral tone mapping at the map's exposure, its sky and fog. No detail texture.
+const ATM = { de_mirage: { sky: '8fc0ee', sun: 'fdcc99', hemiSky: 'fdeadf', hemiGround: 'd7ab7c', exposure: 1.6 },
+  de_nuke: { sky: 'a9c8e6', sun: 'fbf5e8', hemiSky: 'd8e9f7', hemiGround: '8d979e', exposure: 1.81 } };
+const today = ATM[q.get('today')];
+if (today) { r.toneMapping = THREE.NeutralToneMapping; r.toneMappingExposure = today.exposure; scene.background = new THREE.Color('#' + today.sky); scene.fog = new THREE.Fog(scene.background.getHex(), 120, 420); r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; }
+// vc=<range>: COLOR_0 is baked light, rgb = sqrt(light / range) (tiers.mjs): unlit, diffuse x rgb^2 x range.
+const vcRange = +(q.get('vc') || 0);
+const cam = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 2000);
+const hemiI = today ? 2.6 : +(q.get('hemi')||0.45), sunI = today ? 3.6 : +(q.get('sun')||0.9);
+scene.add(new THREE.HemisphereLight(today ? '#' + today.hemiSky : 0xdfe9ff, today ? '#' + today.hemiGround : 0x6b5a46, hemiI)); const sun = new THREE.DirectionalLight(today ? '#' + today.sun : 0xfff2e0, sunI); sun.position.set(40, 80, 20); scene.add(sun);
+if (q.get('shadow')==='1') { r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; sun.castShadow = true; const sz = +(q.get('shadowsize')||4096); sun.shadow.mapSize.set(sz, sz); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05; }
+if (q.get('sky')==='1') { scene.background = new THREE.Color(0x9fb8d6); scene.fog = new THREE.Fog(0x9fb8d6, 120, 420); }
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+const t0 = performance.now();
+loader.load(file, (g) => {
+  const palette = { floor:0x8a7f6a, wall:0xb59f82, wood:0x7a5a3a, metal:0x6b6f75, marble:0xcfc8b8, brick:0xa8684c, plaster:0xc9b08f, tile:0x9c8f7a, tree:0x4f7a3a, rug:0x8a3a3a };
+  let tris = 0;
+  g.scene.traverse(o => { if (o.isMesh) { tris += o.geometry.index ? o.geometry.index.count/3 : o.geometry.attributes.position.count/3;
+    if (flat) { const n = (o.name + ' ' + (o.material?.name||'')).toLowerCase(); let c = 0x9a9a9a; for (const k in palette) if (n.includes(k)) { c = palette[k]; break; }
+      o.material = new THREE.MeshStandardMaterial({ color: c, flatShading: true, roughness: 0.9 }); }
+    const src = o.material; const keep = src ? { map: src.map, color: src.color, vertexColors: q.get('ao')==='1' && !!o.geometry.attributes.color, alphaTest: src.alphaTest || (src.transparent ? 0.5 : 0), transparent: false, side: src.side } : null;
+    if (q.get('unlit')==='1' && src) { o.material = new THREE.MeshBasicMaterial(keep); }
+    if (lmTex && src) {
+      const lit = !!o.geometry.attributes.uv1;
+      o.material = new THREE.MeshBasicMaterial({ ...keep, map: q.get('base') === '0' ? null : keep.map, color: q.get('base') === '0' ? 0xffffff : keep.color, vertexColors: false,
+        lightMap: lit ? lmTex : null, lightMapIntensity: Math.PI * +(q.get('lmscale') || 1) });
+      if (!lit && q.get('unlm')) o.material.color.set('#' + q.get('unlm'));
+      // vl=<scale>: unlightmapped primitives lit by their COLOR_0 vertex light (shrink-lm --vertexlight), x scale.
+      if (!lit && q.get('vl') && o.geometry.attributes.color) { o.material.vertexColors = true; o.material.color.setScalar(+q.get('vl')); }
+      if (lit && rgbmRange) o.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('lightMapTexel.rgb * lightMapIntensity', `lightMapTexel.rgb * lightMapTexel.a * ${rgbmRange.toFixed(1)} * lightMapIntensity`); };
+      // lmsqrt=<range>: the shipped lightmap since Task 4's fix round, sqrt(light / range) squared.
+      if (lit && sqrtRange) o.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('lightMapTexel.rgb * lightMapIntensity', `lightMapTexel.rgb * lightMapTexel.rgb * ${sqrtRange.toFixed(1)} * lightMapIntensity`); };
+    }
+    if (q.get('lit')==='1' && src) {
+      const smooth = q.get('smooth')==='1';
+      if (smooth && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+      if (keep.alphaTest > 0) keep.side = THREE.DoubleSide;
+      o.material = new THREE.MeshLambertMaterial({ ...keep, flatShading: !smooth });
+      if (keep.map) { keep.map.anisotropy = +(q.get('aniso')||1); keep.map.needsUpdate = true; }
+      if (q.get('shadow')==='1') { o.castShadow = true; o.receiveShadow = true; }
+    }
+    if (vcRange && src && o.geometry.attributes.color && !(lmTex && o.geometry.attributes.uv1)) {
+      // base=0 drops the colour texture here too, so the light alone shows (seams, Task 4).
+      o.material = new THREE.MeshBasicMaterial({ ...keep, map: q.get('base') === '0' ? null : keep.map, color: q.get('base') === '0' ? 0xffffff : keep.color, vertexColors: true });
+      o.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `diffuseColor.rgb *= vColor.rgb * vColor.rgb * ${vcRange.toFixed(1)};`); };
+    }
+    if (today && src) {
+      if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+      o.material = new THREE.MeshLambertMaterial({ ...keep, vertexColors: !!o.geometry.attributes.color, side: keep.alphaTest > 0 ? THREE.DoubleSide : keep.side });
+      o.castShadow = true; o.receiveShadow = true;
+    }
+    if (q.get('normals')==='1') { o.geometry.computeVertexNormals(); }
+    if (q.get('nocolor')==='1' && o.material) { o.material.vertexColors = false; o.material.needsUpdate = true; }
+    if (!window.__dbg && o.material?.map) { window.__dbg = {map: !!o.material.map, vc: o.material.vertexColors, hasColorAttr: !!o.geometry.attributes.color, metal: o.material.metalness, rough: o.material.roughness, emissive: o.material.emissive?.getHex()}; } } });
+  const embedded = []; g.scene.traverse(o => { if (o.isLight) embedded.push(o); }); embedded.forEach(l => l.removeFromParent()); console.log('removed embedded lights', embedded.length);
+  console.log('DBG', JSON.stringify(window.__dbg));
+  scene.add(g.scene);
+  const box = new THREE.Box3().setFromObject(g.scene); const c = box.getCenter(new THREE.Vector3()); const s = box.getSize(new THREE.Vector3());
+  if (today) {
+    // Lighting.fit: the sun from SUN_OFFSET's direction at the centre, the box +-0.6 of the largest side.
+    const dir = new THREE.Vector3(40, 80, 20).normalize(), depthHalf = (Math.abs(s.x * dir.x) + Math.abs(s.y * dir.y) + Math.abs(s.z * dir.z)) / 2;
+    const dist = Math.max(new THREE.Vector3(40, 80, 20).length(), depthHalf + 2), ext = Math.max(s.x, s.y, s.z) * 0.6;
+    sun.position.copy(dir).multiplyScalar(dist).add(c); sun.target.position.copy(c); scene.add(sun.target);
+    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05;
+    const sc = sun.shadow.camera; sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = Math.max(400, dist + depthHalf + 1); sc.updateProjectionMatrix();
+  }
+  if (q.get('shadow')==='1') { const ext = +(q.get('shadowext')||0) || Math.max(s.x, s.z) * 0.6; sun.position.set(c.x + 40, c.y + 80, c.z + 20); sun.target.position.copy(c); scene.add(sun.target); const sc = sun.shadow.camera; sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 400; sc.updateProjectionMatrix(); }
+  const off = (q.get('cam')||'').split(',').map(Number); const at = (q.get('at')||'').split(',').map(Number);
+  if (off.length===3 && !off.some(isNaN)) { cam.position.set(c.x+off[0], c.y+off[1], c.z+off[2]); } else { cam.position.set(c.x + s.x*0.55, c.y + s.y*2.2, c.z + s.z*0.75); }
+  if (at.length===3 && !at.some(isNaN)) { c.set(c.x+at[0], c.y+at[1], c.z+at[2]); }
+  const pos = (q.get('pos')||'').split(',').map(Number), look = (q.get('look')||'').split(',').map(Number);
+  if (pos.length===3 && !pos.some(isNaN)) cam.position.set(pos[0],pos[1],pos[2]);
+  if (look.length===3 && !look.some(isNaN)) c.set(look[0],look[1],look[2]);
+  cam.lookAt(c);
+  const ctl = new OrbitControls(cam, r.domElement); ctl.target.copy(c); ctl.update();
+  document.getElementById('hud').textContent = `${file} loaded in ${((performance.now()-t0)/1000).toFixed(1)}s tris=${tris|0} size=${s.x.toFixed(0)}x${s.y.toFixed(0)}x${s.z.toFixed(0)} m`;
+  let frames = 0, ft = performance.now();
+  (function loop(){ r.render(scene, cam); frames++; if (performance.now() - ft > 2000) { document.getElementById('hud').textContent += ` fps=${(frames/((performance.now()-ft)/1000)).toFixed(0)}`; ft = Infinity; } requestAnimationFrame(loop); })();
+  window.__ready = true; window.__scene = scene; window.__r = r;
+}, undefined, e => { document.getElementById('hud').textContent = 'ERR ' + e; });
+</script></body></html>

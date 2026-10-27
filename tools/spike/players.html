@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><title>player spike</title>
+<style>body{margin:0;background:#0b0d10}canvas{display:block}#hud{position:fixed;left:8px;top:8px;color:#ddd;font:13px monospace;white-space:pre}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.186.1/build/three.module.js","three/addons/":"https://unpkg.com/three@0.186.1/examples/jsm/"}}</script>
+</head><body><div id="hud">loading</div><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+const q = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({antialias:true}); r.setPixelRatio(1); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0d10);
+scene.add(new THREE.GridHelper(20, 20, 0x334, 0x223));
+const cam = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.05, 200); cam.position.set(0, 2.2, 7.5);
+const ctl = new OrbitControls(cam, r.domElement); ctl.target.set(0, 0.9, 0); ctl.update();
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+const TINT = { ct: 0x4da3ff, t: 0xf2a33a };
+const mixers = []; const lines = [];
+async function load(file) { return new Promise((res, rej) => loader.load(file, res, undefined, rej)); }
+const t0 = performance.now();
+const glbs = { ct: await load('ct.glb'), t: await load('t.glb') };
+for (const [side, g] of Object.entries(glbs)) {
+  const clips = g.animations; lines.push(`${side}: clips=${clips.map(c => `${c.name}(${c.duration.toFixed(2)}s,${c.tracks.length}tr)`).join(' ')}`);
+  let skinned = 0, bones = 0, tris = 0; g.scene.traverse(o => { if (o.isSkinnedMesh) { skinned++; bones = o.skeleton.bones.length; tris += o.geometry.index.count/3; } });
+  lines.push(`${side}: skinnedMeshes=${skinned} bones=${bones} tris=${tris|0}`);
+  const box = new THREE.Box3().setFromObject(g.scene); const sz = box.getSize(new THREE.Vector3()); lines.push(`${side}: bbox ${sz.x.toFixed(2)}x${sz.y.toFixed(2)}x${sz.z.toFixed(2)} m, minY ${box.min.y.toFixed(2)}`);
+}
+// 10 rigs: 5 CT + 5 T, each a different clip, team tinted, unlit
+const names = ['idle_rifle','walk_n_rifle','run_n_rifle','crouch_n_rifle','inair_stand_rifle'];
+let i = 0;
+for (const side of ['ct','t']) for (const name of names) {
+  const src = glbs[side]; const rig = SkeletonUtils.clone(src.scene);
+  rig.traverse(o => { if (o.isMesh) { const m = o.material; o.material = new THREE.MeshBasicMaterial({ map: m.map, color: new THREE.Color(TINT[side]).lerp(new THREE.Color(0xffffff), q.get('tint') ? +q.get('tint') : 0.55) }); o.frustumCulled = false; } });
+  rig.position.set((i % 5) * 1.6 - 3.2, 0, side === 'ct' ? -1 : 1); rig.rotation.y = Math.PI; scene.add(rig);
+  const mixer = new THREE.AnimationMixer(rig); const clip = THREE.AnimationClip.findByName(src.animations, name);
+  if (clip) { mixer.clipAction(clip).play(); } else lines.push(`MISSING ${side} ${name}`);
+  mixers.push(mixer); i++;
+}
+// blend demo: rig 0 crossfades idle->run over time
+const clock = new THREE.Clock(); let frames = 0, ft = performance.now(), fps = 0;
+(function loop(){ const dt = clock.getDelta(); for (const m of mixers) m.update(dt); r.render(scene, cam); frames++;
+  if (performance.now() - ft > 2000) { fps = frames/((performance.now()-ft)/1000); frames = 0; ft = performance.now(); }
+  document.getElementById('hud').textContent = `loaded ${((t0 && (performance.now()-t0))/1000).toFixed(1)}s ago  rigs=${mixers.length} fps=${fps.toFixed(0)}\n` + lines.join('\n'); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script></body></html>
