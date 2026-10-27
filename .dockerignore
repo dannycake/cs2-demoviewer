@@ -1,0 +1,17 @@
+# Context is the repo root (`docker build -t demoviewer .`). The image needs only web/ and
+# server/ sources; assets are bind-mounted at run time and never baked in.
+.git
+.codegraph
+.playwright-mcp
+assets
+docs
+tools
+**/node_modules
+**/target
+web/dist
+web/test-results
+server/data
+server/vendor/parser/test_demo.dem
+# Demos and packs never belong in the image or the build context.
+**/*.dem
+**/*.dvpk.gz
