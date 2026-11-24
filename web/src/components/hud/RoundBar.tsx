@@ -3,6 +3,7 @@
 
 import { countRender, useDerived } from '../../state/derive';
 import { timelineFor } from '../../sim/timeline';
+import Digits from './Digits';
 import { Bomb } from './icons';
 import { roundBarModel, type Side } from './models';
 import styles from './hud.module.css';
@@ -47,8 +48,14 @@ export default function RoundBar() {
           {phase === 'over' ? 'Round over' : text}
         </span>
         <span className={styles.clockMeta}>
-          {phase === 'freeze' ? 'Buy time' : `Round ${m.round}`}
-          <span className={styles.half}>{m.half}</span>
+          {phase === 'freeze' ? (
+            'Buy time'
+          ) : (
+            <Digits text={`Round ${m.round}`} />
+          )}
+          <span className={styles.half}>
+            <Digits text={m.half} />
+          </span>
         </span>
       </div>
       <Score side={m.t} label="T" />

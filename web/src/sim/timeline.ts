@@ -29,7 +29,9 @@ export interface Effect {
   entityId: number;
 }
 
-export type GrenadeLabel = 'SMOKE' | 'FLASH' | 'HE' | 'MOLLY' | 'INC' | 'DECOY';
+/** The label over a grenade in flight, in sentence case. */
+export type GrenadeLabel =
+  'Smoke' | 'Flash' | 'HE' | 'Molotov' | 'Incendiary' | 'Decoy';
 
 export interface Projectile {
   grenade: Grenade;
@@ -163,12 +165,22 @@ export function blinkOn(seconds: number): boolean {
 }
 
 export const GRENADE_LABEL: Readonly<Record<Grenade['kind'], GrenadeLabel>> = {
-  smoke: 'SMOKE',
-  flash: 'FLASH',
+  smoke: 'Smoke',
+  flash: 'Flash',
   he: 'HE',
-  molotov: 'MOLLY',
-  incendiary: 'INC',
-  decoy: 'DECOY',
+  molotov: 'Molotov',
+  incendiary: 'Incendiary',
+  decoy: 'Decoy',
+};
+
+/** A grenade as the round feed says it: "Milo threw a flash". */
+export const GRENADE_THROWN: Readonly<Record<Grenade['kind'], string>> = {
+  smoke: 'a smoke',
+  flash: 'a flash',
+  he: 'an HE grenade',
+  molotov: 'a molotov',
+  incendiary: 'an incendiary',
+  decoy: 'a decoy',
 };
 
 interface RoundData {
@@ -745,7 +757,7 @@ export class Timeline {
         tick: g.start_tick,
         kind: 'throw',
         team: team(thrower),
-        text: `${name(thrower)} threw ${label}`,
+        text: `${name(thrower)} threw ${GRENADE_THROWN[g.kind]}`,
       });
     }
 

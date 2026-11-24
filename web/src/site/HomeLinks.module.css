@@ -1,0 +1,33 @@
+/* The home page's links: grey labels, plain links, no boxes. */
+.links {
+  display: grid;
+  gap: 6px;
+  padding: 12px 20px 0;
+  font-size: 13px;
+}
+
+.links p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0;
+}
+
+.label {
+  color: var(--mute);
+}
+
+.links a {
+  color: var(--dim);
+  text-decoration: none;
+}
+
+.links a:hover {
+  color: var(--tx);
+}
+
+.links a:focus-visible {
+  outline: 2px solid var(--red-ink);
+  outline-offset: 2px;
+}

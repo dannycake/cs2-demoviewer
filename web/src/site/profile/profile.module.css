@@ -1,0 +1,1279 @@
+/* The profile page (the mockup profile-page-v5): boxes with hairlines between them, numbers in
+   JetBrains Mono, the stat strip in rainbow and every other figure white. */
+.page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  /* Room under the last row, so its buttons are not at the screen's edge. */
+  padding-bottom: 48px;
+}
+
+/* The profile's column, closed by a hairline on three sides. Its text keeps one edge, `--inset`
+   from the hairline: headings, figures and the tables' names alike. */
+.stack {
+  --inset: 14px;
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+@container (max-width: 760px) {
+  .stack {
+    --inset: 10px;
+  }
+}
+
+.stack > * {
+  background: var(--bg);
+}
+
+/* What shows instead of a profile (hidden, not found, did not load): the contact page's column
+   of boxes, its heading, one sentence and the one way on. */
+.noticePage {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px 0;
+}
+
+.notice {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  max-width: 680px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.notice > * {
+  margin: 0;
+  background: var(--bg);
+}
+
+.noticeTitle {
+  padding: 18px 20px 16px;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.noticeText {
+  padding: 18px 20px;
+  color: var(--dim);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.noticeText :global(.n) {
+  color: var(--tx);
+  font-weight: 600;
+}
+
+.noticeGo {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 20px;
+  border: 0;
+  color: var(--tx);
+  font:
+    600 15px/1 Archivo,
+    system-ui,
+    sans-serif;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.noticeGo:hover {
+  background: var(--hover);
+}
+
+/* who */
+.who {
+  --ava: 104px;
+  grid-template-columns: var(--ava) 1fr;
+}
+
+/* The avatar's cell: a square, or as tall as the name and Steam's facts beside it when those
+   take two rows; the picture in it stays a square. */
+.ava {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: var(--ava);
+  background: #000;
+}
+
+.ava img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.ava svg {
+  width: 46%;
+  color: var(--mark);
+}
+
+.name {
+  margin: 0;
+  overflow: hidden;
+  padding: 12px 16px 10px;
+  font-size: 40px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Each fact as wide as its words, the spacer taking what is left of the row; facts that do not
+   fit go on to another row, which they fill between them (the spacer's share of a row is a
+   thousand facts'). */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  background: var(--line);
+  border-top: 1px solid var(--line);
+}
+
+.facts > * {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 36px;
+  padding: 0 var(--inset);
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.facts b {
+  color: var(--tx);
+  font-weight: 600;
+}
+
+.fill {
+  flex: 1000 0 0;
+}
+
+.track {
+  justify-content: flex-end;
+  color: var(--tx);
+  font-weight: 600;
+}
+
+.trackOff {
+  color: var(--mute);
+  font-weight: 500;
+}
+
+/* A link to the player's profile on another site: its whole cell, in the foot's links' grey and
+   weight, white under the pointer, with a small arrow after its words for the new tab. */
+.facts > .out {
+  color: var(--dim);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.facts > .out:hover {
+  background: var(--hover);
+  color: var(--tx);
+}
+
+.out img {
+  width: 16px;
+  height: 16px;
+}
+
+.arrow {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  color: var(--mute);
+}
+
+/* ranks: Premier left, one Competitive rank right, each box and its words together in the
+   middle of the cell; the words keep their own left edge. */
+.ranks {
+  grid-template-columns: 1fr 1fr;
+}
+
+.rank {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  min-height: 108px;
+  padding: 16px var(--inset);
+}
+
+.rankTitle {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.rankSub {
+  margin-top: 2px;
+  color: var(--dim);
+  font-size: 14px;
+}
+
+.rankSub :global(.n) {
+  color: var(--tx);
+}
+
+/* A rank's box: the Competitive icon (2.5 : 1) and the Premier box are one size. */
+.icon {
+  width: 140px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.iconSmall {
+  width: 75px;
+  height: 30px;
+}
+
+.iconNone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mute);
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+
+.badge {
+  --tier: #b0c3d9;
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  box-sizing: border-box;
+  width: 140px;
+  height: 56px;
+  padding: 0 14px 0 18px;
+  clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  background: color-mix(in srgb, var(--tier) 16%, #000);
+  color: var(--tier);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 56px;
+  letter-spacing: -0.02em;
+}
+
+.badge small {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.badgeNone {
+  clip-path: none;
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+  background: transparent;
+  color: var(--mute);
+}
+
+/* "Unrated" is a word, set as the site's words are, not as the rating's figures. */
+.badgeNone:not(.badgeSmall) {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.badgeSmall {
+  width: auto;
+  height: 30px;
+  min-width: 84px;
+  padding: 0 12px 0 14px;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  font-size: 19px;
+  line-height: 30px;
+}
+
+.badgeSmall small {
+  font-size: 13px;
+}
+
+/* stats: number first, label after, on one line; one rule a width, the same in the strip, the
+   figures under it and the tables: beside its figure, or (the narrowest phones, at the end) under
+   it. The columns narrow where the figures still fit beside their labels. In the grids a cell's
+   figure stands at the top, so a figure with a line under it (won–lost) is level with its row's;
+   in the rainbow strip each cell's words stand in its middle, both ways. */
+.stats {
+  grid-template-columns: 1.35fr 1.2fr 1fr 1fr 1fr 1fr;
+}
+
+.stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  align-content: flex-start;
+  gap: 2px 7px;
+  padding: 14px var(--inset) 12px;
+  white-space: nowrap;
+}
+
+.stat :global(.n) {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.stat > span:not(:first-child) {
+  color: var(--dim);
+  font-size: 14px;
+}
+
+.lead :global(.n) {
+  font-size: 44px;
+}
+
+.stats .stat {
+  align-content: center;
+  justify-content: center;
+  padding: 14px var(--inset);
+  text-align: center;
+}
+
+.stat .sub {
+  flex-basis: 100%;
+  color: var(--mute);
+  font-size: 13px;
+}
+
+.stat .sub :global(.n) {
+  color: #f2f2f2;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* the figures under the strip: the same cells, white and smaller, four a row */
+.figs {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.figs .stat > :global(.n) {
+  font-size: 24px;
+}
+
+/* A label that is a number (2K): the numbers' face at the label's weight. */
+.labN {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: -0.02em;
+}
+
+/* maps, who the player played with, what the replays add, and the FACEIT history */
+.maps,
+.mates,
+.block,
+.faceit {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  margin: 0;
+  padding: 0 var(--inset);
+  background: var(--red-hover);
+  color: #fff;
+  font:
+    600 15px/1 Archivo,
+    system-ui,
+    sans-serif;
+}
+
+/* A teammate's name is the link, and the whole of its cell. */
+.mrow > .mateCell {
+  padding: 0;
+}
+
+.mateName {
+  flex: 1;
+  align-self: stretch;
+  overflow: hidden;
+  min-width: 0;
+  padding: 0 var(--inset);
+  color: var(--tx);
+  line-height: 48px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+}
+
+.mateName:hover {
+  background: var(--hover);
+}
+
+/* The share won takes the map table's last two columns, so the lines run on from it. */
+.across {
+  grid-column: span 2;
+}
+
+/* A weapon's share of kills takes the rest of its row, so the lines run on from the maps. Red
+   fills the cell as far as the share goes (`--share`, ./FromReplays), so the weapon with the most
+   kills shows at a glance; dark enough that the dim label keeps 6.4:1. */
+.share {
+  grid-column: span 3;
+}
+
+.mrow > .share {
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--red) 30%, var(--bg)) var(--share, 0%),
+    transparent 0
+  );
+}
+
+.wname {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+/* A weapon's silhouette at the end of its name's cell, right-aligned, so they line up. */
+.wslot {
+  display: inline-flex;
+  flex: none;
+  justify-content: flex-end;
+  margin-left: auto;
+  font-size: 18px;
+}
+
+.wicon {
+  display: inline-block;
+  opacity: 0.9;
+}
+
+/* How many clutches were played, after those won: set back. */
+.of {
+  color: var(--mute);
+  font-weight: 500;
+}
+
+/* Over how many matches the replays' figures are, when not all: at the heading's end, white as
+   the heading is: on the crimson a grey would lose its contrast (white keeps 6:1). */
+.headNote {
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.headNote :global(.n) {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* A block's figures: as many a row as it has (`--cols`), two on a phone. */
+.cells {
+  grid-template-columns: repeat(var(--cols, 4), 1fr);
+}
+
+/* The bomb and the trades, side by side. */
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--line);
+}
+
+.mrow {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 150px;
+  gap: 1px;
+  background: var(--line);
+}
+
+/* Wide enough, the tables' lines run on from the figures' above, four a row: the name, the
+   matches and the wins each a quarter, the rating and the rank sharing the last. */
+@container (min-width: 961px) {
+  .mrow {
+    grid-template-columns:
+      repeat(3, calc((100% - 3px) / 4)) minmax(0, 1fr)
+      120px;
+  }
+}
+
+.mrow > * {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 48px;
+  padding: 0 var(--inset);
+  background: var(--bg);
+  white-space: nowrap;
+}
+
+.m {
+  font-weight: 600;
+}
+
+.mrow :global(.n) {
+  font-size: 18px;
+}
+
+.lab {
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.none {
+  color: var(--mute);
+  font-weight: 500;
+}
+
+/* matches: one row of equal tabs, however many there are. */
+.tabs {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 1px;
+  background: var(--line);
+}
+
+.tabs button {
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: var(--bg);
+  color: var(--dim);
+  font:
+    600 15px/1 Archivo,
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.tabs button:not(.on):hover {
+  background: var(--hover);
+  color: var(--tx);
+}
+
+.tabs button.on {
+  background: var(--tx);
+  color: #000;
+}
+
+/* With ADR, HS% and KAST: the widest screens only (below, as on a phone, they are left out). A
+   figure's column is never narrower than its widest figure and label ("16–12 score"). The row is
+   in a `.g`, which paints its children black: its own gaps draw the lines between its cells.
+   Before the Replay, at every width, the toggle that opens the game's figures (`.toggle`). */
+.row {
+  display: grid;
+  grid-template-columns:
+    56px minmax(0, 1.6fr) minmax(124px, 1fr) minmax(116px, 1fr) 0.85fr 0.85fr
+    minmax(104px, 0.95fr) minmax(116px, 1fr) 120px 44px 112px;
+  gap: 1px;
+}
+
+:global(.site) :global(.g) > .row {
+  background: var(--line);
+}
+
+.row > * {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 56px;
+  padding: 0 14px;
+  background: var(--bg);
+  white-space: nowrap;
+}
+
+.res {
+  justify-content: center;
+  padding: 0;
+  color: var(--mute);
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.res_w {
+  background: var(--tx) !important;
+  color: #000;
+}
+
+.res_l {
+  color: var(--dim);
+}
+
+.map {
+  flex-direction: column;
+  align-items: flex-start !important;
+  justify-content: center;
+  gap: 1px !important;
+  font-weight: 600;
+}
+
+.map small {
+  display: flex;
+  max-width: 100%;
+  color: var(--dim);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+/* The mode or event, cut short when the row is narrow; the day after it stays whole. */
+.mode {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.sep {
+  flex: none;
+  white-space: pre;
+}
+
+/* The date is a number too: the numbers' face, at the line's own size and weight. */
+.day {
+  flex: none;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: -0.02em;
+}
+
+/* A map's strip behind its name, in the match rows and the map table alike (./strip.ts; the
+   site's maps/<map>.webp, a WebP of CS2's screenshot): never more than a fifth as bright as the
+   picture, so the dim words over its whitest pixel (#a2a2a2 on #333) keep 4.9:1, and gone to the
+   black ground by the cell's right edge, where the figures stand. Square and unblurred, it
+   covers the cell from its middle. */
+.row > .strip,
+.mrow > .strip {
+  background-image:
+    linear-gradient(to right, rgb(0 0 0 / 0.8) 35%, var(--bg)), var(--strip);
+  background-position: center;
+  background-size: cover;
+}
+
+.row :global(.n) {
+  font-size: 19px;
+}
+
+.rt :global(.n) {
+  font-weight: 700;
+}
+
+.replay {
+  justify-content: center;
+  background: var(--red) !important;
+  color: #fff !important;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.replay:hover {
+  background: var(--red-hover) !important;
+}
+
+.replay:focus-visible {
+  outline-color: #fff;
+}
+
+.more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  border: 0;
+  background: var(--bg);
+  color: var(--dim);
+  font:
+    600 15px/1 Archivo,
+    system-ui,
+    sans-serif;
+}
+
+button.more {
+  cursor: pointer;
+}
+
+/* A tab with no matches, and an open game's "Not in the totals" (`.note`): said quietly, at the
+   rows' inset, not as a button. */
+.empty,
+.note {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 var(--inset);
+  color: var(--dim);
+  font-size: 14px;
+}
+
+button.more:hover {
+  background: var(--hover);
+  color: var(--tx);
+}
+
+/* A tracked player's FACEIT matches (./FaceitHistory): the day, the map, the score, the result,
+   the competition, and its links: the Replay's red when the site holds the demo, else Upload the
+   demo (when an upload would attach) and Watch on FACEIT side by side, in the outbound links'
+   grey. The last column fits both, so the rows' columns line up. */
+.frow {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) 96px 56px minmax(0, 1.2fr) 312px;
+  gap: 1px;
+  background: var(--line);
+}
+
+.frow > * {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 48px;
+  padding: 0 var(--inset);
+  background: var(--bg);
+  white-space: nowrap;
+}
+
+.frow :global(.n) {
+  font-size: 18px;
+}
+
+.fday {
+  color: var(--dim);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: -0.02em;
+}
+
+.fres {
+  justify-content: center;
+  padding: 0 !important;
+  color: var(--dim);
+  font-weight: 800;
+  font-size: 18px;
+}
+
+/* A win on its white cell: black, as in the match rows. */
+.fres.res_w {
+  color: #000;
+}
+
+/* A long hub's or league's name is cut short, never the links after it. */
+.fcomp {
+  display: block !important;
+  overflow: hidden;
+  color: var(--dim);
+  line-height: 48px;
+  text-overflow: ellipsis;
+}
+
+/* The links' cell has no inset or ground of its own: each link is a cell, the gap between them
+   the line. */
+.frow > .fgo {
+  gap: 1px;
+  padding: 0;
+  background: var(--line);
+}
+
+.fgo > a {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 48px;
+  padding: 0 var(--inset);
+  background: var(--bg);
+  white-space: nowrap;
+}
+
+.faceitGo {
+  color: var(--dim);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.faceitGo:hover {
+  background: var(--hover);
+  color: var(--tx);
+}
+
+/* Narrower, the competition goes, and the links take a line of their own under the facts, in
+   full. */
+@container (max-width: 800px) {
+  .frow {
+    grid-template-columns: 96px minmax(0, 1fr) 80px 48px;
+  }
+
+  .frow > .fcomp {
+    display: none !important;
+  }
+
+  .frow > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (max-width: 560px) {
+  .frow {
+    grid-template-columns: 72px minmax(0, 1fr) 64px 40px;
+  }
+
+  .frow > *,
+  .fgo > a {
+    padding: 0 10px;
+  }
+
+  .frow :global(.n) {
+    font-size: 16px;
+  }
+}
+
+@container (max-width: 1160px) {
+  /* Six to a row leaves the labels no room beside their figures: three, as on a phone. */
+  .stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .row {
+    grid-template-columns:
+      56px minmax(0, 1.4fr) minmax(124px, 0.9fr) minmax(116px, 0.9fr)
+      minmax(116px, 0.9fr) 120px 44px 112px;
+  }
+
+  .row > .wider {
+    display: none;
+  }
+}
+
+/* A tablet's row: the score and the rating (the K–D and the rank are left out, as a phone leaves
+   out the score too). Up to 800 px, a little wider than the rest of the tablet's layout, so the
+   map's name keeps its room beside the toggle. */
+@container (min-width: 561px) and (max-width: 800px) {
+  .row {
+    grid-template-columns: 56px minmax(0, 1fr) 124px 116px 44px 112px;
+  }
+
+  .row > .desk {
+    display: none;
+  }
+}
+
+@container (max-width: 560px) {
+  .noticePage {
+    padding: 0;
+  }
+
+  .notice {
+    border: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* The avatar, a square, beside the name only; Steam's facts take the width under both, two a
+     row (one that does not fit half the row takes all of it, as does the last of an odd
+     number). */
+  .who {
+    --ava: 80px;
+  }
+
+  .about {
+    display: contents;
+  }
+
+  .name {
+    align-content: center;
+    padding: 0 var(--inset);
+    background: var(--bg);
+    font-size: 30px;
+  }
+
+  .facts {
+    grid-column: 1 / -1;
+    border-top: 0;
+  }
+
+  .facts > * {
+    flex-basis: calc(50% - 1px);
+  }
+
+  .track {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  .fill {
+    display: none !important;
+  }
+
+  .ranks {
+    grid-template-columns: 1fr;
+  }
+
+  .rank {
+    gap: 14px;
+    min-height: 84px;
+    padding: 12px var(--inset);
+  }
+
+  .icon {
+    width: 120px;
+    height: 48px;
+  }
+
+  .badge {
+    width: 120px;
+    height: 48px;
+    padding: 0 12px 0 15px;
+    font-size: 29px;
+    line-height: 48px;
+  }
+
+  .badge small {
+    font-size: 19px;
+  }
+
+  .badgeSmall {
+    height: 30px;
+    min-width: 84px;
+    font-size: 19px;
+    line-height: 30px;
+  }
+
+  .stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Sized so "100% opening" fits beside its label down to about 385 px. */
+  .stat {
+    gap: 2px 4px;
+    padding: 10px var(--inset) 8px;
+  }
+
+  .stats .stat {
+    padding: 9px var(--inset);
+  }
+
+  .stat :global(.n),
+  .lead :global(.n) {
+    font-size: 26px;
+  }
+
+  .stat > span:not(:first-child) {
+    font-size: 13px;
+  }
+
+  .stat .sub {
+    display: none;
+  }
+
+  .figs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .figs .stat > :global(.n) {
+    font-size: 22px;
+  }
+
+  /* The record's share won is the only place it shows. */
+  .figs .stat .sub {
+    display: block;
+  }
+
+  /* The name takes what the figures leave: each figure's column as wide as its widest figure
+     and label ("123 matches", "100% wins", "2.17 rating"), so none is cut or meets the edge. */
+  .mrow {
+    grid-template-columns:
+      minmax(0, 1.3fr) minmax(98px, 1fr) minmax(84px, 1fr)
+      minmax(92px, 1fr);
+  }
+
+  .share {
+    grid-column: span 2;
+  }
+
+  .cells {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* An odd number of figures: the last takes the whole row. */
+  .cells > :last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+
+  .pair {
+    grid-template-columns: 1fr;
+  }
+
+  .mrow > * {
+    gap: 4px;
+  }
+
+  .mrow > :not(:first-child) {
+    padding: 0 8px;
+  }
+
+  .mrow > .mateCell {
+    padding: 0;
+  }
+
+  .across {
+    grid-column: auto;
+  }
+
+  .mrow :global(.n) {
+    font-size: 16px;
+  }
+
+  .lab {
+    font-size: 12px;
+  }
+
+  .row {
+    grid-template-columns: 48px 1fr auto 44px 60px;
+  }
+
+  .row > * {
+    padding: 0 12px;
+  }
+
+  .wide {
+    display: none !important;
+  }
+
+  .replay span {
+    display: none;
+  }
+}
+
+/* Steam's facts on their way: said quietly beside their dashes (on a phone, on a row of its own
+   while it shows), upright as every other word (the site loads no italic). */
+.asking {
+  color: var(--mute);
+}
+
+@container (max-width: 560px) {
+  .fill.asking {
+    display: flex !important;
+    flex-basis: 100%;
+  }
+}
+
+/* Between a phone and a desktop: two figures a row, as on a phone, so each fits beside its
+   label. */
+@container (min-width: 561px) and (max-width: 760px) {
+  .figs,
+  .cells {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cells > :last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+
+  .pair {
+    grid-template-columns: 1fr;
+  }
+
+  .mrow {
+    grid-template-columns: 1.2fr 1fr 1fr 1fr 100px;
+  }
+}
+
+/* Phones: the weapons' kills and shares take only the width of the widest of them, one set of
+   columns for every row (a subgrid), and the names, with their silhouettes beside them, the
+   rest. */
+@container (max-width: 560px) {
+  .wblock {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .wblock > * {
+    grid-column: 1 / -1;
+  }
+
+  .mrow.wrow {
+    grid-template-columns: subgrid;
+  }
+
+  .wrow > .share {
+    grid-column: auto;
+  }
+
+  .wcell .wslot {
+    font-size: 15px;
+  }
+}
+
+/* The narrowest phones: every figure's label goes under it (the strip's could not fit beside
+   them), so three fit the strip's row and four a table's. */
+@container (max-width: 380px) {
+  /* A long name keeps its letters a step smaller before it is cut. */
+  .name {
+    font-size: 24px;
+  }
+
+  /* A step smaller, so the longest tab keeps clear of its cell's edges. */
+  .tabs button {
+    font-size: 13px;
+  }
+
+  .stat {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+
+  .stats .stat {
+    align-items: center;
+  }
+
+  .stat .sub {
+    flex-basis: auto;
+  }
+
+  /* Labels under their figures need less room: the name takes more. */
+  .mrow {
+    grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(0, 1fr));
+  }
+
+  .mrow > :not(:first-child) {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    padding: 0 8px;
+  }
+}
+
+/* A row's toggle (./Toggle): its own cell at the row's end, the whole cell the button, never
+   narrower than a finger's 44 px. Its chevron is two sides of a square, pointing down while shut
+   and up while open. */
+.mrow > button.toggle,
+.row > button.toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: var(--bg);
+  color: var(--dim);
+  cursor: pointer;
+}
+
+.mrow > button.toggle:hover,
+.row > button.toggle:hover {
+  background: var(--hover);
+  color: var(--tx);
+}
+
+.toggle[aria-expanded='true'] {
+  color: var(--tx);
+}
+
+.chevron {
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.toggle[aria-expanded='true'] .chevron {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+/* What a row opens to (./Expansion), directly under it: the profile's own blocks, set in one
+   level from the table's edge by a black margin and a hairline, with the lines between them as
+   everywhere else. In the match rows' `.g`, which would paint it black, its own background is
+   the lines'. */
+.expansion {
+  display: grid;
+  gap: 1px;
+  padding-left: 1px;
+  border-left: var(--inset) solid var(--bg);
+  background: var(--line);
+}
+
+:global(.site) :global(.g) > .expansion {
+  background: var(--line);
+}
+
+.note {
+  background: var(--bg);
+}
+
+/* A map's row ends in its toggle. The rank's column gives it its width, so the name, matches,
+   wins and rating keep the columns the sides' and weapons' rows have; its icon stands in the
+   middle of what is left. */
+.mrow.maprow {
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 105px 44px;
+}
+
+.mrow.maprow > .wide {
+  justify-content: center;
+  padding: 0;
+}
+
+/* Wide enough, the name, matches and wins keep the figures' quarters above; the rating, the
+   rank and the toggle share the last, the rank narrowing to its icon before the rating is cut. */
+@container (min-width: 961px) {
+  .mrow.maprow {
+    grid-template-columns:
+      repeat(3, calc((100% - 3px) / 4)) minmax(104px, 1fr)
+      minmax(89px, 105px) 44px;
+  }
+}
+
+@container (min-width: 561px) and (max-width: 760px) {
+  .mrow.maprow {
+    grid-template-columns: 1.2fr 1fr 1fr 1fr 100px 44px;
+  }
+}
+
+/* A phone's has no rank (`.wide`). Its figures' columns are only as wide as the widest of them
+   in the table, one set of columns for every row (a subgrid, as the weapons' rows have), so the
+   names keep the room the toggle would take from fixed columns; the heading and what a row opens
+   take the whole width. */
+@container (max-width: 560px) {
+  .maps {
+    grid-template-columns: minmax(0, 1fr) auto auto auto 44px;
+  }
+
+  .maps > * {
+    grid-column: 1 / -1;
+  }
+
+  .mrow.maprow {
+    grid-template-columns: subgrid;
+  }
+}
+
+/* The narrowest phones: the match row's rating, like every table figure there, has its label
+   under it, and the result's column is narrower, so the map's name keeps the room the toggle
+   takes. */
+@container (max-width: 380px) {
+  .row {
+    grid-template-columns: 40px 1fr auto 44px 60px;
+  }
+
+  .row > .rt {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+  }
+}

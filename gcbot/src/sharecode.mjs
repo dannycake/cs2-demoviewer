@@ -1,8 +1,9 @@
-// Match share codes (`CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx`): finding one in pasted text, and
-// decoding it to the ids the Game Coordinator is asked about. The decoding is
-// akiver/csgo-sharecode's: the 25 characters, read last to first, are a base-57 number whose 18
-// bytes (big endian) hold the match id and outcome id (u64) and the token (u16), each little
-// endian. Crosshair codes have the same shape and alphabet: they decode, and Valve has no match.
+// Match share codes (`CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx`): finding one in pasted text,
+// decoding it to the ids the Game Coordinator is asked about, and encoding a match the GC lists
+// back into one. The decoding is akiver/csgo-sharecode's: the 25 characters, read last to first,
+// are a base-57 number whose 18 bytes (big endian) hold the match id and outcome id (u64) and the
+// token (u16), each little endian. Crosshair codes have the same shape and alphabet: they decode,
+// and Valve has no match.
 
 /** The share-code alphabet: letters and digits without I, g, l, 0 or 1. */
 export const ALPHABET = 'ABCDEFGHJKLMNOPQRSTUVWXYZabcdefhijkmnopqrstuvwxyz23456789';
@@ -45,4 +46,30 @@ export function decodeShareCode(code) {
     outcomeId: bytes.readBigUInt64LE(8).toString(),
     token: bytes.readUInt16LE(16),
   };
+}
+
+const U64 = /^\d{1,20}$/;
+
+/**
+ * The share code for `{ matchId, outcomeId, token }` (decimal strings and a number, the shape
+ * decodeShareCode gives): its inverse, which /recent gives each match the GC lists. Null when an
+ * id is not a decimal string that fits in 64 bits or the token not an integer that fits in 16.
+ * globaloffensive-sharecode only decodes.
+ */
+export function encodeShareCode({ matchId, outcomeId, token } = {}) {
+  const fits = (id) => typeof id === 'string' && U64.test(id) && BigInt(id) < 2n ** 64n;
+  if (!fits(matchId) || !fits(outcomeId)) return null;
+  if (!Number.isInteger(token) || token < 0 || token > 0xffff) return null;
+  const bytes = Buffer.alloc(18);
+  bytes.writeBigUInt64LE(BigInt(matchId), 0);
+  bytes.writeBigUInt64LE(BigInt(outcomeId), 8);
+  bytes.writeUInt16LE(token, 16);
+  // Big endian, least significant digit first.
+  let n = BigInt(`0x${bytes.toString('hex')}`);
+  let digits = '';
+  for (let i = 0; i < 25; i++) {
+    digits += ALPHABET[Number(n % 57n)];
+    n /= 57n;
+  }
+  return `CSGO-${digits.match(/.{5}/g).join('-')}`;
 }

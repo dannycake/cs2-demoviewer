@@ -1,54 +1,62 @@
-/* The gamw design system, from its reference page (2026-10-22): a dark-only operator console. One
-   monospace face, lowercase muted chrome, hairline lines, one 3 px radius, and orange only
-   for what is active, live or primary, never for decoration. The CS2 team colours stay: they
-   are the game's, not the interface's.
+/* The viewer's look: skunk.club's (site/tokens.css, docs/superpowers/specs/2026-10-27-skunk-club-
+   design.md §9), over the 3D view. Pure black and #262626 hairlines, crimson only for what is
+   primary or active, square boxes, Archivo for words and JetBrains Mono for numbers, sentence case.
+   Panels over the match are see-through black (`--panel`, `--panel-strong`) so the scene shows.
+   The CS2 team colours stay: they are the game's, not the interface's.
 
-   The names in the first block are the system's own. The second block maps the names of the
-   @skunk/ui copy this file replaced onto them, for code that still uses those. */
+   The names in the first block are the viewer's own (they were the gamw system's). The second
+   block maps the names of the @skunk/ui copy this file replaced onto them, for code that still
+   uses those. */
 
 :root {
   color-scheme: dark;
 
   /* Surfaces and lines */
   --ink: #000000; /* page ground */
-  --surface-1: #090806; /* panels, tables, inputs */
-  --surface-2: #0f0e0b; /* hover, raised */
-  --line: #211e1a; /* control borders */
-  --line-soft: #0c0b09; /* row separators, panel edges */
+  --surface-1: #000000; /* panels, tables, inputs */
+  --surface-2: #0d0d0d; /* hover, raised */
+  --line: #262626; /* hairlines: control and panel borders */
+  --line-soft: #262626; /* row separators and panel edges: the site's one hairline */
+  /* Panels over the 3D view: black, see-through. */
+  --panel: rgba(0, 0, 0, 0.75);
+  --panel-strong: rgba(0, 0, 0, 0.88);
 
   /* Text */
-  --text: #e6e8ef; /* data */
-  --text-dim: #9aa1b2; /* secondary data */
-  --text-mute: #6b7280; /* labels, chrome */
+  --text: #f6f6f6; /* data */
+  --text-dim: #a2a2a2; /* secondary data */
+  --text-mute: #666666; /* labels, chrome */
 
-  /* Accent: active, live, primary */
-  --brand: #ff7a1a;
-  --brand-dim: #a34c0b; /* ticks, quiet accents */
-  --on-brand: #1a0b00; /* text on a brand fill */
-  --brand-rgb: 255, 122, 26;
+  /* Accent: primary and active */
+  --brand: #e4163a;
+  --brand-ink: #ff5a74; /* the accent as text or a line on black */
+  --brand-hover: #f0304f;
+  --brand-dim: #8a0f25; /* ticks, quiet accents */
+  --on-brand: #ffffff; /* text on a brand fill */
+  --brand-rgb: 228, 22, 58;
 
   /* Semantic: never structure; a status is a dot plus a word */
-  --ok: #35d07f;
+  --ok: #4be08a;
   --warn: #ffc233;
-  --danger: #ff4d6a;
+  --danger: #ff5a74;
   --info: #4da3ff;
 
   /* CS2 team colours */
   --t: #f2a33a;
   --ct: #4da3ff;
 
-  /* Type: one face, six steps */
+  /* Type: Archivo for words, JetBrains Mono for numbers; six steps */
+  --sans: 'Archivo', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
   --fs-title: 19px; /* 700: page titles */
   --fs-section: 16px; /* 600: section headings */
   --fs-body: 13px; /* 400: primary data */
   --fs-dense: 12px; /* 400: secondary cells, footers */
-  --fs-label: 11px; /* 400, tracked: column headers, labels; never bold */
+  --fs-label: 11px; /* 400: column headers, labels */
   --fs-micro: 10.5px; /* 500: status words */
-  --track-label: 0.05em;
+  --track-label: 0;
 
-  /* Shape and density */
-  --r: 3px;
+  /* Shape and density: square, as the site's boxes */
+  --r: 0;
   --ctl-h: 30px; /* inputs, selects, buttons, chips in a row */
   --ctl-h-compact: 24px; /* inside tables and panels */
   --chip-h: 22px;
@@ -62,8 +70,8 @@
   --gap-3: 14px;
   --gap-4: 20px;
   --ease: 120ms ease;
-  /* Shadows only under overlays (menus, sheets). */
-  --shadow-overlay: 0 10px 30px rgba(0, 0, 0, 0.7);
+  /* No shadows: a popover is a black box with a hairline. */
+  --shadow-overlay: none;
 }
 
 @media (pointer: coarse) {
@@ -119,7 +127,7 @@
   --shadow-lg: var(--shadow-overlay);
 
   --font-family-mono: var(--mono);
-  --font-family-sans: var(--mono);
+  --font-family-sans: var(--sans);
   --font-size-xs: var(--fs-label);
   --font-size-sm: var(--fs-dense);
   --font-size-lg: var(--fs-section);
@@ -140,23 +148,25 @@
 
 html {
   font-size: 16px;
+  /* A tap shows the control's own pressed state, not the browser's blue flash. */
+  -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: var(--fs-body);
   background-color: var(--ink);
   color: var(--text);
   line-height: var(--line-height-normal);
   min-height: 100vh;
-  font-variant-numeric: tabular-nums;
 }
 
-input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
-textarea,
-select {
+/* The viewer's form controls; the skunk.club pages (`.site`, site/tokens.css) style their own. */
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not(.site *),
+textarea:not(.site *),
+select:not(.site *) {
   height: var(--ctl-h);
   padding: 0 var(--space-2);
   background-color: var(--surface-1);
@@ -173,9 +183,9 @@ textarea {
   padding: var(--pad-1);
 }
 
-input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):focus,
-textarea:focus,
-select:focus {
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not(.site *):focus,
+textarea:not(.site *):focus,
+select:not(.site *):focus {
   outline: none;
   border-color: var(--brand);
 }
@@ -251,7 +261,7 @@ input[type='range']::-webkit-slider-thumb {
   width: 10px;
   height: 10px;
   margin-top: -4px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--text);
 }
 
@@ -259,7 +269,7 @@ input[type='range']::-moz-range-thumb {
   width: 10px;
   height: 10px;
   border: 0;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--text);
 }
 
@@ -284,9 +294,12 @@ a {
     text-decoration-color var(--ease);
 }
 
-a:hover {
-  color: var(--text);
-  text-decoration-color: var(--brand);
+/* Hover is a mouse's: on a touch screen it would stick after a tap. */
+@media (hover: hover) {
+  a:hover {
+    color: var(--text);
+    text-decoration-color: var(--brand-ink);
+  }
 }
 
 ::selection {
@@ -309,7 +322,7 @@ a:hover {
 }
 
 :focus-visible {
-  outline: 1px solid var(--brand);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
 }
 

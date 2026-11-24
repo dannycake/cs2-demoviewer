@@ -308,9 +308,10 @@ describe('roundSummary: the next round', () => {
       buy(6500, 1, 'Smoke Grenade', false, 1),
     ]);
     const next = roundSummary(pk, 0).next!;
+    // Weapons, then armour, the kit and grenades, whatever the order bought.
     expect(next[0].buys.map((b) => b.label)).toEqual([
-      'Armor',
       'AK-47',
+      'Armor',
       'Flashbang',
       'High Explosive Grenade',
       'Flashbang',

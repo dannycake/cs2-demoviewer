@@ -1,0 +1,43 @@
+/* The one line over the server's pre-rendered page when the live page did not load: a cell of the
+   pre-rendered column's width (prerender.css), its words dim, the way to ask again in white. */
+.wrap {
+  display: flex;
+  justify-content: center;
+  padding: 24px 16px 0;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: 880px;
+  min-height: 48px;
+  padding: 0 0 0 20px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.line p {
+  margin: 0;
+  color: var(--dim);
+}
+
+.line button {
+  align-self: stretch;
+  padding: 0 20px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--tx);
+  font:
+    600 15px/1 Archivo,
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.line button:hover {
+  background: var(--hover);
+}

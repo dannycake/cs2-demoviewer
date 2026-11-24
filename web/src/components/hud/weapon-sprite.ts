@@ -4,6 +4,9 @@
 import type { CSSProperties } from 'react';
 import sheet from '../weapon-icons.json';
 
+/** The sheet's URL. */
+export const WEAPON_SPRITE = '/weapons.png';
+
 const ICONS = sheet.icons as Record<
   string,
   { x: number; y: number; w: number; h: number } | undefined
@@ -25,7 +28,7 @@ export function spriteStyle(
   return {
     width: u(icon.w * k),
     height: u(height),
-    backgroundImage: 'url(/weapons.png)',
+    backgroundImage: `url(${WEAPON_SPRITE})`,
     backgroundSize: `${u(sheet.width * k)} ${u(sheet.height * k)}`,
     backgroundPosition: `${u(-icon.x * k)} ${u(-icon.y * k)}`,
   };

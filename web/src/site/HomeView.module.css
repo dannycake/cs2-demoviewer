@@ -1,0 +1,342 @@
+/* The homepage (the mockup home-v9): the hero loop behind a skewed, translucent band. The hero fills
+   the screen the bar and footer leave (`.site main`), so the page fits a phone without
+   scrolling; the band is in the flow, so the hero grows with it (name hits, the upload card,
+   an error) rather than cutting off its headline or input. */
+.hero {
+  position: relative;
+  padding-bottom: 72px;
+  overflow: hidden;
+  background: #000;
+}
+
+.video,
+.poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* The chicken sits in the clip's lower third: it shows below the band. */
+  object-position: 50% 62%;
+  /* Dimmed, so the page stays dark: the clip is a sunlit Dust 2. */
+  filter: brightness(0.42) saturate(0.85);
+}
+
+.fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.55) 0,
+    rgba(0, 0, 0, 0) 22%,
+    rgba(0, 0, 0, 0) 78%,
+    #000 100%
+  );
+  pointer-events: none;
+}
+
+.band {
+  --line: #3a3a3a;
+  position: relative;
+  /* Clear of the bar by more than the skew lifts the band's right end. */
+  margin: clamp(64px, 10vh, 120px) -60px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.74);
+  transform: skewY(-3deg);
+  backdrop-filter: blur(2px);
+}
+
+.inner {
+  display: grid;
+  gap: 1px;
+  max-width: 1040px;
+  padding: 34px 100px 36px;
+  transform: skewY(3deg);
+}
+
+/* A long file name or a list shrinks inside the band instead of widening it past the screen. */
+.inner > *,
+.card > * {
+  min-width: 0;
+}
+
+.headline {
+  margin: 0 0 22px;
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.up {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px;
+  background: var(--line);
+}
+
+.up > * {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 20px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--dim);
+  font-size: 14px;
+}
+
+/* A cell of the grid, whose gaps draw its lines. */
+.pick {
+  padding: 0 22px;
+  border: 0;
+  color: var(--tx);
+  font:
+    600 15px/1 Archivo,
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.pick:hover {
+  background: var(--hover);
+}
+
+.pick svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.picker {
+  display: none;
+}
+
+.notice,
+.kept,
+.faceitHint {
+  margin: 0;
+  padding: 10px 20px 0;
+  font-size: 13px;
+}
+
+/* Come from a FACEIT match's Upload the demo: said in the page's plain words, above the upload. */
+.faceitHint {
+  padding: 0 20px 10px;
+  color: var(--tx);
+}
+
+.notice {
+  color: var(--red-ink);
+}
+
+.kept {
+  color: var(--mute);
+}
+
+/* The upload under way, or failed: a box in the band where the upload row was. */
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px;
+  background: rgba(0, 0, 0, 0.85);
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+
+.card p {
+  margin: 0;
+}
+
+.file {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.meter {
+  position: relative;
+  display: flex;
+  height: 8px;
+  background: #1a1a1a;
+}
+
+.meterDone {
+  background: var(--red);
+}
+
+.meterCurrent {
+  background: var(--red);
+  opacity: 0.5;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meterCurrent {
+    animation: none;
+  }
+}
+
+.detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--dim);
+  font-size: 14px;
+}
+
+.errorTitle {
+  font-weight: 700;
+}
+
+.errorText {
+  color: var(--red-ink);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+}
+
+.go,
+.ghost {
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  font:
+    600 14px/1 Archivo,
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.go {
+  background: var(--red);
+  color: #fff;
+}
+
+.go:hover {
+  background: var(--red-hover);
+}
+
+.go:focus-visible {
+  outline-color: #fff;
+}
+
+.ghost {
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+  background: #000;
+  color: var(--tx);
+}
+
+@container (max-width: 560px) {
+  .hero {
+    padding-bottom: 40px;
+  }
+
+  .video,
+  .poster {
+    object-position: 38% 45%;
+  }
+
+  .band {
+    margin: clamp(28px, 4vh, 48px) -30px 0;
+    transform: skewY(-4deg);
+  }
+
+  .inner {
+    padding: 22px 44px 26px;
+    transform: skewY(4deg);
+  }
+
+  .headline {
+    margin-bottom: 16px;
+    font-size: 34px;
+  }
+
+  .up {
+    grid-template-columns: 1fr;
+  }
+
+  .pick {
+    justify-content: center;
+  }
+
+  .hint {
+    display: none;
+  }
+}
+
+/* The smallest phones: the band's padding gives back the rows the tournament links add. */
+@container (max-width: 360px) {
+  .inner {
+    padding: 16px 44px 18px;
+  }
+}
+
+/* What the site does, under the hero: the words a search engine reads too, shared with the
+   server's copy (server/crates/server/guides/home.html). */
+.about {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 20px 56px;
+  color: var(--dim);
+  line-height: 1.55;
+}
+
+.about h2 {
+  margin: 0 0 10px;
+  color: var(--tx);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.about p {
+  margin: 0 0 12px;
+}
+
+.about ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about a {
+  color: var(--tx);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.about a:hover {
+  color: var(--red-ink);
+}
+
+@container (max-width: 760px) {
+  .about {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    padding: 28px 16px 40px;
+  }
+}

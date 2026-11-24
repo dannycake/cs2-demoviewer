@@ -1,0 +1,274 @@
+.wrap {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.ask {
+  display: grid;
+  grid-template-columns: 1fr 160px 180px;
+  gap: 1px;
+  background: var(--line);
+}
+
+.ask > * {
+  min-width: 0;
+  background: var(--bg);
+}
+
+/* Nothing typed: no tag yet, so no cell for one. */
+.ask:not(.has) {
+  grid-template-columns: 1fr 180px;
+}
+
+.ask:not(.has) .tag {
+  display: none;
+}
+
+.in {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 64px;
+  padding: 0 20px;
+  border-left: 3px solid transparent;
+  font-size: 18px;
+  transition: border-color 0.15s;
+}
+
+.in svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--dim);
+}
+
+.in input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--tx);
+  font:
+    500 18px/1 Archivo,
+    system-ui,
+    sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.in input::placeholder {
+  color: var(--mute);
+}
+
+/* The cell shows focus, not the field inside it. */
+.in input:focus-visible {
+  outline: none;
+}
+
+.in:focus-within {
+  box-shadow: inset 0 -2px 0 var(--red-ink);
+}
+
+.has .in {
+  border-left-color: var(--red);
+}
+
+/* A code, an ID or a link in the numbers' face; a name stays in the words'. */
+.code .in input {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--mute);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.has .tag span {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  white-space: nowrap;
+  background: var(--tx);
+  color: #000;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.has .tag.none span {
+  background: var(--red);
+  color: #fff;
+}
+
+/* A cell of the grid, whose gaps draw its lines. */
+.go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 64px;
+  border: 0;
+  background: var(--bg);
+  color: var(--mute);
+  font:
+    700 17px/1 Archivo,
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.has .go:not(:disabled):hover {
+  background: var(--red-hover);
+}
+
+.has .go:not(:disabled):focus-visible {
+  outline-color: #fff;
+}
+
+.has .go:not(:disabled) {
+  background: var(--red);
+  color: #fff;
+}
+
+.go:disabled {
+  cursor: default;
+}
+
+/* The bar's tag is as wide as its word, so the input keeps what room the bar has. */
+.ask.bar {
+  grid-template-columns: 1fr auto 140px;
+}
+
+.ask.bar:not(.has) {
+  grid-template-columns: 1fr 140px;
+}
+
+.bar .tag {
+  padding: 0 12px;
+}
+
+/* A narrower bar keeps its room for the input: no tag, the button's word says a profile or a
+   match. */
+@container (max-width: 1000px) {
+  .ask.bar {
+    grid-template-columns: 1fr 140px;
+  }
+
+  .bar .tag {
+    display: none;
+  }
+}
+
+.bar .in,
+.bar .go {
+  height: 51px;
+}
+
+.bar .in,
+.bar .in input {
+  font-size: 15px;
+}
+
+.bar .go {
+  font-size: 15px;
+}
+
+.error {
+  margin: 0;
+  padding: 12px 20px;
+  background: var(--bg);
+  color: var(--red-ink);
+}
+
+.hits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.hits a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 48px;
+  padding: 0 20px;
+  background: var(--bg);
+  color: var(--tx);
+  text-decoration: none;
+}
+
+.hits a:hover {
+  background: var(--hover);
+}
+
+/* The count's word dim, its figure white. */
+.hits span {
+  color: var(--dim);
+}
+
+.hits .n {
+  color: var(--tx);
+}
+
+/* In the homepage's band: the cells let the footage through. */
+.hero > * {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.hero.has .in {
+  background: #000;
+}
+
+@container (max-width: 560px) {
+  /* A longer tag widens its cell while shown. */
+  .ask {
+    grid-template-columns: 1fr minmax(92px, auto);
+  }
+
+  .ask:not(.has) {
+    grid-template-columns: 1fr;
+  }
+
+  .has .tag span {
+    padding: 0 8px;
+    font-size: 13px;
+  }
+
+  .in {
+    height: 56px;
+    padding: 0 14px;
+  }
+
+  /* 16 px keeps iOS from zooming in on focus; the placeholder fits a 390 px phone at 15. */
+  .in input {
+    font-size: 16px;
+  }
+
+  .in input::placeholder {
+    font-size: 15px;
+  }
+
+  /* The tag keeps clear of the cell's edges. */
+  .tag {
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .go {
+    grid-column: 1 / -1;
+    height: 52px;
+  }
+}

@@ -111,5 +111,46 @@ describe('LabelSprites', () => {
     expect(lines[1].text).toBe('[]VanDeepDarkFantasies[]');
     expect(24 * 0.6 * px(lines[1].font)).toBeLessThanOrEqual(512);
     expect(px(lines[1].font)).toBeGreaterThan(24);
+    // Names are words: Archivo, as the interface sets them.
+    expect(lines[0].font).toMatch(/Archivo/);
+    expect(lines[0].font).not.toMatch(/Mono/);
+  });
+
+  it('sets a grenade label in Archivo, smaller when the word would not fit, and figures in mono', () => {
+    const lines: { text: string; font: string }[] = [];
+    const make = (width: number, height: number): LabelCanvas => {
+      const g = {
+        clearRect() {},
+        fillText(text: string) {
+          lines.push({ text, font: g.font });
+        },
+        strokeText() {},
+        measureText(t: string) {
+          return {
+            width: [...t].length * 0.6 * parseInt(/(\d+)px/.exec(g.font)![1]),
+          };
+        },
+        font: '',
+        fillStyle: '',
+        strokeStyle: '',
+        lineWidth: 0,
+        textAlign: '',
+        textBaseline: '',
+        lineJoin: '',
+      };
+      return { width, height, getContext: () => g };
+    };
+    const labels = new LabelSprites(make);
+    labels.material('Smoke', 'Milo', '#d8dde3');
+    labels.material('Incendiary', '', '#ff9a3a');
+    labels.material('-27', '', '#ffffff', 'mono');
+    const px = (font: string) => parseInt(/(\d+)px/.exec(font)![1]);
+    expect(lines[0]).toMatchObject({ text: 'Smoke' });
+    expect(lines[0].font).toMatch(/^700 44px Archivo/);
+    expect(lines[1].font).toMatch(/Archivo/);
+    // Ten characters at 44 px would be 264 px across the 256 px label: smaller, to fit.
+    const inc = lines.find((l) => l.text === 'Incendiary')!;
+    expect(10 * 0.6 * px(inc.font)).toBeLessThanOrEqual(256 - 16);
+    expect(lines.at(-1)!.font).toMatch(/JetBrains Mono/);
   });
 });

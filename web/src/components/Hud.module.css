@@ -5,10 +5,11 @@
   display: flex;
   gap: var(--space-3);
   padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r);
   background: rgba(0, 0, 0, 0.6);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
   pointer-events: none;
 }

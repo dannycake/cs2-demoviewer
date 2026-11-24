@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
@@ -82,11 +83,14 @@ describe('PostStack', () => {
       RenderPass,
       GTAOPass,
       UnrealBloomPass,
+      // The depth of field, off unless asked (the homepage video's render).
+      Pass,
       OutputPass,
       ShaderPass,
       SMAAPass,
     ];
     expect(p.passes).toHaveLength(kinds.length);
+    expect(p.passes[3].enabled).toBe(false);
     p.passes.forEach((pass, i) => expect(pass).toBeInstanceOf(kinds[i]));
   });
 

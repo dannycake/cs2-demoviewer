@@ -1,0 +1,116 @@
+/* The skunk.club pages' look (the design's mockups): pure #000 for OLED screens, one grey for the
+   hairlines between boxes, one crimson; boxy and filled, nothing rounded. Scoped to `.site`, so
+   the viewer's own tokens (styles/tokens.css) stay as they are. Below 560 px wide (a container
+   query on `.site`) the pages take their phone layout. The server's pre-rendered page (`#pre`,
+   prerender.css) has the same tokens, so it reads as the same site. */
+.site,
+#pre {
+  --bg: #000000;
+  --line: #262626;
+  --tx: #f6f6f6;
+  --dim: #a2a2a2;
+  /* The quieter text, still 5.3:1 on the black (small text needs 4.5:1). */
+  --mute: #808080;
+  /* Marks, not text: the foot's skunk, a missing avatar's person. */
+  --mark: #666666;
+  --red: #e4163a;
+  /* A crimson button under the pointer, and the section headers' ground: darker, so its white
+     words keep their contrast. */
+  --red-hover: #c41232;
+  --red-ink: #ff5a74;
+  /* A cell that is a link or a button, under the pointer. */
+  --hover: #0d0d0d;
+}
+
+.site {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--tx);
+  font:
+    15px/1.4 Archivo,
+    system-ui,
+    sans-serif;
+}
+
+.site *,
+.site *::before,
+.site *::after {
+  box-sizing: border-box;
+}
+
+/* Every number on the site. */
+.site .n {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* A percentage's sign, a little smaller than its figure (Pct). */
+.site .pct {
+  margin-left: 0.04em;
+  font-size: 0.72em;
+}
+
+/* The triangle on a replay button (PlayIcon): the word's colour, a little under its size. */
+.site .play {
+  flex: none;
+  width: 0.8em;
+  height: 0.8em;
+}
+
+/* Boxes with a hairline between them: the grid's gap shows the line colour behind. */
+.site .g {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.site .g > * {
+  min-width: 0;
+  background: var(--bg);
+}
+
+/* A site page is a page: it scrolls, on a phone under a finger. The 3D viewer holds html, body and
+   #root at the screen's height with nothing scrolling (styles/global.css); with a site page in
+   it they are ordinary again. */
+html:has(.site:not(.site-chrome)),
+html:has(.site:not(.site-chrome)) body,
+html:has(.site:not(.site-chrome)) #root {
+  height: auto;
+  overflow: visible;
+}
+
+/* The site's bar alone over the replay viewer (`site site-chrome`): the site's tokens, type and
+   container, without a page's frame; the viewer stays a full screen that does not scroll. */
+.site.site-chrome {
+  display: block;
+  min-height: 0;
+}
+
+/* The site's frame over the server's pre-rendered page (`site site-frame`, PreFrame): as tall as
+   the bar and its line, so the pre-rendered body after it is the page under them. */
+.site.site-frame {
+  min-height: 0;
+}
+
+/* The page's main part fills the height the bar and footer leave, and grows past it with its
+   content (a basis of 0 would hold a main that clips, as the homepage's hero does, to the
+   leftover). */
+.site main {
+  flex: 1 0 auto;
+}
+
+.site a {
+  color: inherit;
+}
+
+/* Inside the box it rings (a cell's lines stay clear); white on a crimson fill, where the crimson
+   ring would not show; outside the words of a link in running text, which it would cross. */
+.site :focus-visible {
+  outline: 2px solid var(--red-ink);
+  outline-offset: -2px;
+}

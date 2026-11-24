@@ -52,10 +52,6 @@ const soundRequests = (page: Page) =>
       .filter((r) => r.path.startsWith('/sounds/'))
   );
 
-/** The transport's download counter, in bytes. */
-const counter = async (page: Page) =>
-  Number(await page.getByTestId('traffic').getAttribute('data-bytes'));
-
 /** A point of the 3D view's canvas itself, not of the HUD over it. */
 const canvasPoint = (page: Page) =>
   page.evaluate(() => {
@@ -101,7 +97,6 @@ test('sounds from the first click, fetches what the round needs, and a seek is s
   // Before any click or key: no audio context, nothing under /sounds/.
   expect((await sound(page)).unlocked).toBe(false);
   expect(await soundRequests(page)).toEqual([]);
-  const before = await counter(page);
 
   const at = await canvasPoint(page);
   expect(at).not.toBeNull();
@@ -168,12 +163,10 @@ test('sounds from the first click, fetches what the round needs, and a seek is s
       )
     );
   const bytes = requests.reduce((n, r) => n + r.bytes, 0);
-  const after = await counter(page);
   console.log(
     `sound: ${heard.played} cues played, ${heard.skipped} skipped, ${heard.voices} voices ` +
-      `sounding; the manifest and ${banks.length} banks ${bytes} B; the counter ${before} → ${after} B`
+      `sounding; the manifest and ${banks.length} banks ${bytes} B`
   );
-  expect(after - before).toBeGreaterThanOrEqual(bytes);
 
   // Paused, the next round: nothing plays and nothing rings.
   await page.keyboard.press('Space');

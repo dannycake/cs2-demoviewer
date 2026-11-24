@@ -39,10 +39,17 @@ class FakeGc extends EventEmitter {
     this.user = user;
     this.haveGCSession = false;
     this.requests = [];
+    this.recents = [];
+    this.refuseRecent = false;
     FakeGc.last = this;
   }
   requestGame(details) {
     this.requests.push(details);
+  }
+  // globaloffensive returns false, sending nothing, for an id that is not a player's.
+  requestRecentGames(steamid) {
+    this.recents.push(steamid);
+    return this.refuseRecent ? false : undefined;
   }
 }
 
@@ -169,6 +176,41 @@ describe('startSteam', () => {
     cancel();
     gc.emit('matchList', [{ matchid: '2' }], {});
     assert.deepEqual(lists, [[{ matchid: '1' }]]);
+    steam.stop();
+  });
+
+  it("asks the GC for a player's recent games and hands every matchList over, with its data, until cancelled", () => {
+    const { steam, gc } = start(steamJwt(now() + YEAR));
+    const lists = [];
+    const cancel = steam.requestRecent('76561198000000001', (matches, data) =>
+      lists.push([matches, data])
+    );
+    assert.deepEqual(gc.recents, ['76561198000000001']);
+    gc.emit('matchList', [{ matchid: '1' }], { msgrequestid: 9141, accountid: 39734273 });
+    cancel();
+    gc.emit('matchList', [{ matchid: '2' }], {});
+    assert.deepEqual(lists, [[[{ matchid: '1' }], { msgrequestid: 9141, accountid: 39734273 }]]);
+    assert.equal(gc.listenerCount('matchList'), 0);
+    steam.stop();
+  });
+
+  it('throws, listening to nothing, when globaloffensive refuses the id', () => {
+    const { steam, gc } = start(steamJwt(now() + YEAR));
+    gc.refuseRecent = true;
+    assert.throws(() => steam.requestRecent('76561197960265728', () => {}), /refused/);
+    assert.deepEqual(gc.recents, ['76561197960265728']);
+    assert.equal(gc.listenerCount('matchList'), 0);
+    steam.stop();
+  });
+
+  it("hands a share code's request the matchList's data too", () => {
+    const { steam, gc } = start(steamJwt(now() + YEAR));
+    const lists = [];
+    const details = { matchId: '1', outcomeId: '2', token: 3 };
+    const cancel = steam.request('CSGO-x', details, (matches, data) => lists.push([matches, data]));
+    gc.emit('matchList', [], { msgrequestid: 9147, accountid: null });
+    cancel();
+    assert.deepEqual(lists, [[[], { msgrequestid: 9147, accountid: null }]]);
     steam.stop();
   });
 });

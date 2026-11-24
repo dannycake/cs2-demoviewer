@@ -83,9 +83,9 @@ export default function Scrubber() {
       <div className={styles.track} aria-hidden="true">
         <div className={styles.freeze} />
         <div ref={fill} className={styles.fill} />
-        <div className={styles.marker} title="freeze time ends" />
+        <div className={styles.marker} title="Freeze time ends" />
         {m.end < m.max && (
-          <div className={styles.roundEnd} title="the round is decided" />
+          <div className={styles.roundEnd} title="Round decided" />
         )}
         <div className={styles.events}>
           {model.events.map((e) => (

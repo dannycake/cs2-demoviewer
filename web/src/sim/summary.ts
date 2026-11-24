@@ -10,13 +10,15 @@
 // - The next round's money is at its first sample; its buys are its `item_purchase` events
 //   from its start to its buy end (its `buytime_ended` after the freeze, else the freeze end
 //   and `SUMMARY.buyS`), less what was sold back and what is only re-listed (`purchasesOf`),
-//   matched to players by Steam id (the event carries no player index). A pack without money
-//   (`TRK2`) or purchases gives null money and no buys, not zeros.
+//   matched to players by Steam id (the event carries no player index), in one order for every
+//   row: weapons, armour, the kit, grenades. A pack without money (`TRK2`) or purchases gives
+//   null money and no buys, not zeros.
 
 import { moneyKnown, reasonGlyph, weaponIcon } from '../components/hud/models';
 import type { Pack, PackEvent, RoundInfo } from '../pack/types';
 import { roundRecord } from './stats';
 import { timelineFor } from './timeline';
+import { familyOf, normaliseWeapon } from './weapons';
 
 export interface SummaryPlayer {
   index: number;
@@ -33,7 +35,10 @@ export interface NextBuy {
   index: number;
   /** At the next round's first sample; null without money data. */
   money: number | null;
-  /** In the order bought. `icon` is a weapon silhouette's name, '' for armor and the kit. */
+  /**
+   * Weapons, then armour, the kit and grenades (each kind in the order bought). `icon` is a
+   * weapon silhouette's name, '' for armor and the kit.
+   */
   buys: { icon: string; label: string }[];
 }
 
@@ -56,6 +61,13 @@ export const SUMMARY = Object.freeze({
 });
 
 /** Gear, by its `item_name`: shown as a word, without a silhouette. */
+/** Where a buy goes in a row: weapons, then armour, the kit, grenades. */
+function buyRank(b: { icon: string; label: string }): number {
+  if (b.label === 'Armor' || b.label === 'Helmet') return 1;
+  if (b.label === 'Kit') return 2;
+  return familyOf(normaliseWeapon(b.icon)) === 'grenade' ? 3 : 0;
+}
+
 const GEAR_LABEL: Readonly<Record<string, string>> = {
   'Kevlar Vest': 'Armor',
   'Kevlar + Helmet': 'Helmet',
@@ -267,6 +279,8 @@ function nextOf(pack: Pack, c: PackSummaries, round: number): NextBuy[] | null {
           : { icon: weaponIcon(name, team(buy.index)), label: name }
       );
     }
+  // One order for every row (a sort keeps each kind's buys in the order bought).
+  for (const buy of out) buy.buys.sort((a, b) => buyRank(a) - buyRank(b));
   return out;
 }
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Pack, PackEvent, RoundInfo } from '../src/pack/types';
+import { rating, type RatingLine } from '../src/sim/rating';
 import {
   clearStatsCache,
-  rating,
   roundRecord,
   STATS,
   statsThrough,
@@ -165,15 +165,69 @@ describe('statsThrough', () => {
     });
   });
 
-  it('rates the decided rounds only', () => {
-    // Player 0 over both: 1 kill, 1 assist, 1 death, 100 damage, KAST 50.
-    expect(statsThrough(p, 1, 2398)[0].rating).toBeCloseTo(
-      rating({ kast: 50, kpr: 0.5, dpr: 0.5, apr: 0.5, adr: 50 }),
+  it('rates the decided rounds only, as profiles do', () => {
+    // Player 0 over both: 1 kill, 1 assist, 1 death, 100 damage, KAST in 1 round, the opening
+    // duel won in round 1 and lost in round 2.
+    const line: RatingLine = {
+      rounds: 2,
+      kills: 1,
+      deaths: 1,
+      assists: 1,
+      damage: 100,
+      kastRounds: 1,
+      multiKills: [0, 0, 0, 0],
+      openingWins: 1,
+      openingLosses: 1,
+    };
+    expect(statsThrough(p, 1, 2398)[0].rating).toBeCloseTo(rating(line)!, 10);
+    // Inside round 2, its death and its lost duel are not rated yet.
+    expect(statsThrough(p, 1, 2200)[0].rating).toBeCloseTo(
+      rating({
+        ...line,
+        rounds: 1,
+        deaths: 0,
+        kastRounds: 1,
+        openingLosses: 0,
+      })!,
       10
     );
-    // Inside round 2, its death is not rated yet.
-    expect(statsThrough(p, 1, 2200)[0].rating).toBeCloseTo(
-      rating({ kast: 100, kpr: 1, dpr: 0, apr: 1, adr: 100 }),
+  });
+
+  it('marks the opening duel of each round', () => {
+    // Round 1: 0 kills 1 first. Round 2: 1 kills 0 first; the suicide and the team kill after
+    // are not duels.
+    const flags = (r: number) =>
+      roundRecord(p, r).players.map((x) => [x.openingWin, x.openingLoss]);
+    expect(flags(0)).toEqual([
+      [true, false],
+      [false, true],
+      [false, false],
+      [false, false],
+    ]);
+    expect(flags(1)).toEqual([
+      [false, true],
+      [true, false],
+      [false, false],
+      [false, false],
+    ]);
+  });
+
+  it('counts a round of two or more kills towards multi-kills', () => {
+    // Player 0 (T) kills both CTs in round 1: one 2k, rated as the server rates it.
+    const q = twoRounds([death(1100, 1, 0), death(1200, 2, 0)]);
+    const s = statsThrough(q, 0, 1398)[0];
+    expect(s.rating).toBeCloseTo(
+      rating({
+        rounds: 1,
+        kills: 2,
+        deaths: 0,
+        assists: 0,
+        damage: 0,
+        kastRounds: 1,
+        multiKills: [1, 0, 0, 0],
+        openingWins: 1,
+        openingLosses: 0,
+      })!,
       10
     );
   });
@@ -277,16 +331,6 @@ for (const m of MATCHES)
       expect(ms).toBeLessThan(0.1);
     });
   });
-
-describe('rating', () => {
-  it('is the HLTV 2.0 approximation, never below 0', () => {
-    expect(rating({ kast: 100, kpr: 1, dpr: 0, apr: 0, adr: 100 })).toBeCloseTo(
-      1.9758,
-      4
-    );
-    expect(rating({ kast: 0, kpr: 0, dpr: 1, apr: 0, adr: 0 })).toBe(0);
-  });
-});
 
 describe('utility damage', () => {
   it('counts grenade and fire damage to enemies, capped as damage is', () => {

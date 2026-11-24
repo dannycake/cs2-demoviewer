@@ -77,6 +77,17 @@ export const KINDS = Object.freeze([
     root: (m) => ({ cs2Build: m.cs2Build, banks: count(m.banks) }),
     rootLine: (r) => `${r.banks} banks (build ${r.cs2Build})`,
   },
+  // The site's own images (lib/site.mjs). The homepage video under site/home/ is made apart, by
+  // tools/home-video.sh, which writes this manifest again once it is there. Each map's strip is
+  // made from its hero.png, so this runs after the maps (as every kind does).
+  {
+    name: 'site',
+    steps: [['rip-site.sh'], ['build-site.mjs'], ['shrink-chicken.mjs']],
+    check: 'check-site.mjs',
+    gz: false,
+    root: (m) => ({ cs2Build: m.cs2Build, ranks: count(m.ranks), maps: count(m.maps), home: Boolean(m.home) }),
+    rootLine: (r) => `${r.ranks} rank icons, ${r.maps} map strips, ${r.home ? 'with' : 'no'} homepage video (build ${r.cs2Build})`,
+  },
 ].map((k) => Object.freeze({ ...k, steps: Object.freeze(k.steps.map((s) => Object.freeze(s))) })));
 
 /** The kind named `name`, or undefined. */

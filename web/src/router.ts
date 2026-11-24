@@ -24,8 +24,19 @@ export interface FreePose {
 export const FOV_MIN_DEG = 1;
 export const FOV_MAX_DEG = 179;
 
+/** Whose profile: a Steam custom URL name (`/id/<name>`) or a SteamID64 (`/profiles/<id>`). */
+export type ProfileRef =
+  { kind: 'vanity'; name: string } | { kind: 'steamid'; id: string };
+
 export type Route =
-  | { view: 'upload' }
+  | { view: 'home' }
+  | { view: 'profile'; ref: ProfileRef }
+  | { view: 'legal' }
+  | { view: 'track' }
+  | { view: 'events' }
+  | { view: 'event'; slug: string }
+  | { view: 'guides' }
+  | { view: 'guide'; slug: string }
   | {
       view: 'demo';
       demoId: string;
@@ -41,6 +52,21 @@ export type Route =
 
 // Demo ids are base58 from the server; allow the URL-safe alphabet and nothing else.
 const DEMO_PATH = /^\/d\/([A-Za-z0-9_-]+)\/?$/;
+// Steam's own profile addresses with this site's host: anything may follow (`/games/?tab=all`).
+const VANITY_PATH = /^\/id\/([^/]+)(?:\/.*)?$/;
+const STEAMID_PATH = /^\/profiles\/(\d{17})(?:\/.*)?$/;
+const PAGES: Record<string, Route> = {
+  '/legal': { view: 'legal' },
+  '/legal/': { view: 'legal' },
+  '/track': { view: 'track' },
+  '/track/': { view: 'track' },
+  '/events': { view: 'events' },
+  '/events/': { view: 'events' },
+  '/guides': { view: 'guides' },
+  '/guides/': { view: 'guides' },
+};
+const EVENT_PATH = /^\/events\/([a-z0-9][a-z0-9_-]{0,63})$/;
+const GUIDE_PATH = /^\/guides\/([a-z0-9-]{1,64})$/;
 const ROUND = /^\d+$/;
 const TICK = /^\d+(?:\.\d+)?$/;
 const PLAYER = /^\d+$/;
@@ -92,9 +118,29 @@ function writePose(p: FreePose): string {
   return parts.join(',');
 }
 
+/** The route of `url`; any path that is no page of the site is the home page. */
 export function parseRoute(url: URL): Route {
+  const page = PAGES[url.pathname];
+  if (page) return page;
+  const event = EVENT_PATH.exec(url.pathname);
+  if (event) return { view: 'event', slug: event[1] };
+  const guide = GUIDE_PATH.exec(url.pathname);
+  if (guide) return { view: 'guide', slug: guide[1] };
+  const id = STEAMID_PATH.exec(url.pathname);
+  if (id) return { view: 'profile', ref: { kind: 'steamid', id: id[1] } };
+  const vanity = VANITY_PATH.exec(url.pathname);
+  if (vanity) {
+    try {
+      return {
+        view: 'profile',
+        ref: { kind: 'vanity', name: decodeURIComponent(vanity[1]) },
+      };
+    } catch {
+      return { view: 'home' };
+    }
+  }
   const m = DEMO_PATH.exec(url.pathname);
-  if (!m) return { view: 'upload' };
+  if (!m) return { view: 'home' };
   const route: Route = { view: 'demo', demoId: m[1] };
   const q = url.searchParams;
   const round = readNumber(q.get('r'), ROUND);
@@ -111,7 +157,17 @@ export function parseRoute(url: URL): Route {
 }
 
 export function routeToPath(r: Route): string {
-  if (r.view === 'upload') return '/';
+  if (r.view === 'home') return '/';
+  if (r.view === 'legal') return '/legal';
+  if (r.view === 'track') return '/track';
+  if (r.view === 'events') return '/events';
+  if (r.view === 'event') return `/events/${r.slug}`;
+  if (r.view === 'guides') return '/guides';
+  if (r.view === 'guide') return `/guides/${r.slug}`;
+  if (r.view === 'profile')
+    return r.ref.kind === 'steamid'
+      ? `/profiles/${r.ref.id}`
+      : `/id/${encodeURIComponent(r.ref.name)}`;
   const query = new URLSearchParams();
   if (r.round !== undefined) query.set('r', String(r.round));
   if (r.tick !== undefined) query.set('t', String(r.tick));
@@ -123,14 +179,24 @@ export function routeToPath(r: Route): string {
   return `/d/${encodeURIComponent(r.demoId)}${q ? `?${q}` : ''}`;
 }
 
+/** Opens `path` of the site without a page load: App re-reads the route on popstate. */
+export function navigate(path: string): void {
+  history.pushState(null, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  window.scrollTo(0, 0);
+}
+
 /** The app's name as it appears in the page title. */
-export const APP_NAME = 'cs.skunk.to';
+export const APP_NAME = 'skunk.club';
+
+/** The home page's title before the site's name, as the server writes it (`pages::HOME_TITLE`). */
+export const HOME_TITLE = 'CS2 demo viewer in your browser';
 
 /**
- * The document title: the app, then the match's title ("Mirage 13–9", or just the map) and
- * its date when known.
+ * The document title as the server writes it (`pages.rs`): the page ("Alpha1", a match's title
+ * "Mirage 13–9" or just the map), its date when known, then the site; the site alone for none.
  */
 export function pageTitle(title?: string | null, date?: string | null): string {
   if (!title) return APP_NAME;
-  return date ? `${APP_NAME} — ${title} — ${date}` : `${APP_NAME} — ${title}`;
+  return [title, date, APP_NAME].filter(Boolean).join(' · ');
 }

@@ -7,6 +7,7 @@ import {
   WEAPON_CLIP_SUFFIX,
   WEAPON_SHOOT_CLIP,
   weaponClip,
+  weaponName,
 } from '../src/sim/weapons';
 
 describe('normaliseWeapon', () => {
@@ -59,6 +60,32 @@ describe('normaliseWeapon', () => {
     ];
     for (const [input, want] of cases)
       expect(normaliseWeapon(input), input).toBe(want);
+  });
+});
+
+describe('weaponName', () => {
+  it('names a weapon as the game does, whatever the spelling', () => {
+    const cases: [string, string][] = [
+      ['ak47', 'AK-47'],
+      ['m4a1', 'M4A4'],
+      ['m4a1_silencer', 'M4A1-S'],
+      ['usp_silencer', 'USP-S'],
+      ['hkp2000', 'P2000'],
+      ['weapon_deagle', 'Desert Eagle'],
+      ['galilar', 'Galil AR'],
+      ['sg556', 'SG 553'],
+      ['elite', 'Dual Berettas'],
+      ['taser', 'Zeus x27'],
+      ['M4A1-S', 'M4A1-S'],
+    ];
+    for (const [name, shown] of cases)
+      expect(weaponName(name), name).toBe(shown);
+  });
+
+  it('has no name for what the game does not', () => {
+    expect(weaponName('knife')).toBeNull();
+    expect(weaponName('inferno')).toBeNull();
+    expect(weaponName('newgun')).toBeNull();
   });
 });
 

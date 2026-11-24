@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use url::Url;
 
+use crate::http::read_capped;
 use crate::ingest::is_replay_host;
 use crate::sharecode::{self, ShareCode};
 
@@ -36,6 +37,20 @@ pub struct Resolved {
     pub url: Url,
     /// When the match was played, when Valve said.
     pub played_unix: Option<u64>,
+    /// The Game Coordinator's whole match info as gcbot passed it on (64-bit numbers as
+    /// strings); none from a gcbot from before it did.
+    pub info: Option<serde_json::Value>,
+}
+
+/// The game type of the match (`reservation.game_type` of the last round that has one) in the
+/// GC's match info.
+pub fn gc_game_type(info: &serde_json::Value) -> Option<u32> {
+    info.get("roundstatsall")?
+        .as_array()?
+        .iter()
+        .rev()
+        .find_map(|r| r.get("reservation")?.get("game_type")?.as_u64())
+        .and_then(|t| u32::try_from(t).ok())
 }
 
 /// Why a lookup gave no replay URL. Its text is what the user is shown.
@@ -243,8 +258,9 @@ const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
 /// previous lookup timed out; this is for a gcbot that hangs.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(90);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-/// gcbot's answers are under 1 KiB; anything this big is not one.
-const MAX_ANSWER: usize = 64 * 1024;
+/// gcbot's answers carry the GC's match info, about 10 KiB (more for a long match); anything
+/// this big is not one.
+const MAX_ANSWER: usize = 256 * 1024;
 
 /// gcbot's HTTP API at `DEMOVIEWER_GCBOT_URL` (`http://gcbot:8097/` in the stack): `POST
 /// /resolve` for lookups, `GET /health`, asked every [`HEALTH_EVERY`], for [`Resolver::online`].
@@ -263,6 +279,8 @@ struct Answer {
     match_id: String,
     url: String,
     played_at: Option<u64>,
+    #[serde(default)]
+    info: Option<serde_json::Value>,
 }
 
 /// gcbot's error answer.
@@ -328,7 +346,7 @@ impl GcbotClient {
                 .send()
                 .await
                 .ok()?;
-            let body = read_capped(res).await.ok()??;
+            let body = read_capped(res, MAX_ANSWER).await.ok()??;
             serde_json::from_slice::<Health>(&body).ok()
         };
         asked.await.is_some_and(|h| h.steam == "online" && h.gc)
@@ -358,7 +376,7 @@ impl GcbotClient {
             .await
             .map_err(unreachable)?;
         let status = res.status();
-        let body = read_capped(res)
+        let body = read_capped(res, MAX_ANSWER)
             .await
             .map_err(unreachable)?
             .ok_or(ResolveError::BadAnswer)?;
@@ -369,6 +387,7 @@ impl GcbotClient {
                 match_id: a.match_id.parse().map_err(|_| ResolveError::BadAnswer)?,
                 url: Url::parse(&a.url).map_err(|_| ResolveError::BadAnswer)?,
                 played_unix: a.played_at,
+                info: a.info.filter(|i| !i.is_null()),
             });
         }
         let error = serde_json::from_slice::<Refusal>(&body).map(|r| r.error);
@@ -402,17 +421,24 @@ impl Resolver for GcbotClient {
     }
 }
 
-/// The body of `res`, or `None` when it passes [`MAX_ANSWER`].
-async fn read_capped(mut res: reqwest::Response) -> Result<Option<Vec<u8>>, reqwest::Error> {
-    if res.content_length().is_some_and(|n| n > MAX_ANSWER as u64) {
-        return Ok(None);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn the_game_type_is_read_from_the_last_rounds_reservation() {
+        let info = json!({"roundstatsall": [
+            {"reservation": {"game_type": 1}},
+            {"reservation": {"game_type": 8}},
+            {"map": "x"},
+        ]});
+        assert_eq!(gc_game_type(&info), Some(8));
+        assert_eq!(gc_game_type(&json!({"roundstatsall": []})), None);
+        assert_eq!(gc_game_type(&json!({})), None);
+        assert_eq!(
+            gc_game_type(&json!({"roundstatsall": [{"reservation": {"game_type": "8"}}]})),
+            None
+        );
     }
-    let mut body = Vec::new();
-    while let Some(chunk) = res.chunk().await? {
-        if body.len() + chunk.len() > MAX_ANSWER {
-            return Ok(None);
-        }
-        body.extend_from_slice(&chunk);
-    }
-    Ok(Some(body))
 }

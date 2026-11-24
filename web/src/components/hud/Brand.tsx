@@ -1,4 +1,5 @@
-// Top left: the cs.skunk.to mark and wordmark, the map and where the match was played.
+// Top left, under the minimap: the map and where the match was played (the site's bar above the
+// viewer says which site this is).
 
 import { usePlayback } from '../../state/store';
 import { brandModel } from './models';
@@ -9,14 +10,6 @@ export default function Brand() {
   const b = pack ? brandModel(pack.header) : null;
   return (
     <div className={styles.brand}>
-      <a
-        className={styles.wordmark}
-        href="/"
-        aria-label="cs.skunk.to: upload another demo"
-      >
-        <img src="/skunk-mark.svg" alt="" width={28} height={24} />
-        <span>cs.skunk.to</span>
-      </a>
       {b && (
         <span className={styles.match}>
           <span className={styles.mapName}>{b.map}</span>

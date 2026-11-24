@@ -52,7 +52,9 @@ normalised to (-180,180]; `duck = round(duck_amount·255)`; `weapon` = index int
   "sample_hz": 32,
   "tick_step": 2,
   "players": [{ "steamid": "76561198000000001", "name": "…", "team_by_round": [2, 2, 3],
-                "crosshair": "CSGO-QUGOA-uCOn5-HXTw9-8FwfM-sPcAB" }],
+                "crosshair": "CSGO-QUGOA-uCOn5-HXTw9-8FwfM-sPcAB",
+                "rank": { "kind": 11, "value": 8058, "wins": 14, "if_win": 8150,
+                          "if_loss": 7960, "if_tie": 8058 } }],
   "rounds": [{ "number": 1, "start_tick": 1000, "freeze_end_tick": 2280, "end_tick": 7000,
                "post_end_tick": 7446, "winner": 2, "reason": "t_killed", "score_t": 1,
                "score_ct": 0, "samples": 3224 }],
@@ -74,6 +76,13 @@ normalised to (-180,180]; `duck = round(duck_amount·255)`; `weapon` = index int
   to it. Absent in older packs, whose tracks end at `end_tick`; treat it as `end_tick`.
 - `crosshair` (optional): the player's crosshair share code, the last non-empty one in the
   demo.
+- `rank` (optional; absent in packs written before it existed): the player's matchmaking
+  rank as the match started, from the first sample whose rank type is set (later samples can
+  drop back to 0); a player the demo never ranks (a tournament server ranks nobody) has
+  `kind` 0. `kind` is `m_iCompetitiveRankType`: 11 = Premier,
+  12 = Competitive (per map), 7 = Wingman. `value` is `m_iCompetitiveRanking`: the Premier
+  rating, or the skill group 1–18; 0 = unrated. `wins` is `m_iCompetitiveWins`; `if_win`,
+  `if_loss` and `if_tie` are the rating or group the game predicts after each result.
 
 `EVT1` — `[{ "tick": 1234, "kind": "player_death", "data": { … } }]`; `kind` is the game
 event name and `data` its fields.

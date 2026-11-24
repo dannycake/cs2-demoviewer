@@ -1,0 +1,172 @@
+/* The server's pre-rendered page in `#pre`, after the app's root (pages.rs `into_pre`): the page's
+   body for a reader without scripts, or a renderer that cannot reach the API, with the app's frame
+   over it (`PreFrame`) until a view with content of its own removes it (pre.ts). What a search
+   engine reads shows, but for a match's, kept behind the viewer once it runs (`tuckPre`), as it is
+   the same scoreboard in text and the viewer is a canvas. Plain, but the site's: the tournaments page's column, black
+   cells on hairlines, Archivo for words, JetBrains Mono for figures, the heading in white. The
+   tokens are the site's (tokens.css). */
+
+/* Before the app mounts its root is empty, and with only the site's frame in it (PreFrame) it is
+   as tall as the frame (styles/tokens.css holds it at the screen's height): the body after it is
+   the page, and it scrolls. */
+#root:empty,
+#root:has(> .site-frame) {
+  height: auto;
+  min-height: 0;
+}
+
+html:has(#root:empty) body {
+  overflow: auto;
+}
+
+/* In the page, out of sight: clipped, not `display: none`, which would take it from what reads
+   the page. Fixed, so it can add nothing to the height of a page that does not scroll. */
+#pre[data-tucked] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#pre {
+  padding: 24px 16px 56px;
+  background: var(--bg);
+  color: var(--tx);
+  font:
+    15px/1.4 Archivo,
+    system-ui,
+    sans-serif;
+}
+
+#pre *,
+#pre *::before,
+#pre *::after {
+  box-sizing: border-box;
+}
+
+.pre {
+  display: grid;
+  gap: 1px;
+  max-width: 880px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.pre > * {
+  margin: 0;
+  padding: 18px 20px;
+  background: var(--bg);
+}
+
+.pre-h {
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.pre h2 {
+  padding: 14px 20px;
+  color: var(--mute);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pre-sub {
+  color: var(--dim);
+}
+
+.pre a {
+  color: var(--tx);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pre a:hover {
+  color: var(--red-ink);
+}
+
+.pre-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  list-style: none;
+  color: var(--dim);
+}
+
+.pre-sub-row td {
+  color: var(--mute);
+}
+
+.pre-strip b,
+.pre-table td {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.pre-strip b {
+  color: var(--tx);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.pre > .pre-table,
+.pre > .pre-list {
+  padding: 0;
+}
+
+.pre-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pre-table caption {
+  padding: 14px 20px 10px;
+  background: var(--bg);
+  text-align: left;
+  font-weight: 700;
+}
+
+.pre-table th,
+.pre-table td {
+  padding: 10px 20px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.pre-table th {
+  color: var(--mute);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* A table that opens its cell: the column's hairline is already above its heads. */
+.pre-table thead th {
+  border-top: 0;
+}
+
+.pre-table caption + thead th {
+  border-top: 1px solid var(--line);
+}
+
+/* A name or a map that links on: in words, not figures. */
+.pre-table td a {
+  font-family: Archivo, system-ui, sans-serif;
+}
+
+.pre-list {
+  list-style: none;
+}
+
+.pre-list li {
+  padding: 12px 20px;
+}
+
+.pre-list li + li {
+  border-top: 1px solid var(--line);
+}

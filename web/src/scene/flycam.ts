@@ -103,14 +103,14 @@ export class FlyCam {
 
   /**
    * Takes `from`'s pose (and field of view), so switching to it is seamless; after `place`,
-   * keeps the placed pose instead, once.
+   * keeps the placed pose instead, once. Returns whether it took `from`'s.
    */
-  takeFrom(from: THREE.Camera): void {
+  takeFrom(from: THREE.Camera): boolean {
     if (this.placed) {
       this.placed = false;
-      return;
+      return false;
     }
-    if (from === this.camera) return;
+    if (from === this.camera) return false;
     this.camera.position.copy(from.position);
     this.camera.quaternion.copy(from.quaternion);
     const fov = (from as THREE.PerspectiveCamera).isPerspectiveCamera
@@ -120,6 +120,7 @@ export class FlyCam {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
+    return true;
   }
 
   /**

@@ -69,14 +69,15 @@ one-line message naming the variable when `$CS2_DIR/game/csgo/gameinfo.gi` or
 ## Output layout
 
 The server serves `/maps/{path}`, `/players/{path}`, `/weapons/{path}`,
-`/viewmodels/{path}`, `/effects/{path}` and `/sounds/{path}` from the folders of those names
+`/viewmodels/{path}`, `/effects/{path}`, `/sounds/{path}` and `/site/{path}` from the folders of those names
 under `$DEMOVIEWER_ASSETS`, and nothing else from it. The web app finds a map through
 `/maps/<map>/manifest.json` (a 404 means the map is not available), the players through
 `/players/manifest.json`, the weapons through `/weapons/manifest.json`, the first-person arms
 and clips through `/viewmodels/manifest.json`, the effect atlases through
 `/effects/manifest.json` (fetched the first time an effect needs one) and the sound banks through
 `/sounds/manifest.json` (fetched only after the page's first click or key press, and not while
-muted).
+muted). The site's pages find the rank icons, the Steam logo and the homepage video through
+`/site/manifest.json`.
 
 The root `assets/manifest.json` is **not served**: it is the deploy inventory that
 `sync-assets.sh` checks. A GET for `/manifest.json` falls through to the web
@@ -93,12 +94,14 @@ assets/weapons/manifest.json <name>.glb <name>.glb.gz   46 models: one per norma
 assets/viewmodels/manifest.json arms_ct.glb arms_t.glb <name>.glb (each with a .glb.gz)   first person
 assets/effects/manifest.json <key>.webp build.json   11 flipbook atlases (CS2's particle and decal textures)
 assets/sounds/manifest.json manifest.json.gz <bank>.webm build.json   90 Opus banks (CS2's sounds)
+assets/site/manifest.json ranks/skillgroup{0..18,_none}.webp steam-logo.svg maps/<map>.webp build.json [home/hero.mp4 home/hero.webm home/poster.jpg]
 assets/raw/<map>/...            intermediate VRF exports (never served); sky/ and lightmaps/ from rip-lighting.sh
 assets/raw/players/...
 assets/raw/weapons/...
 assets/raw/viewmodels/...
 assets/raw/effects/...
 assets/raw/sounds/...
+assets/raw/site/...             the icons, the logo, the chicken as exported, and chicken.glb (shrunk, never served)
 assets/build.log                build-assets.sh output (never synced)
 ```
 
@@ -1403,6 +1406,71 @@ concrete, default, dirt, glass, glassbottle, metalbarrel, metalvehicle, metalven
 rubber, solidmetal, wood, wood_basket, wood_ladder, wood_panel, wood_solid and woodbox; plaster,
 rock, brick and boulder on concrete).
 
+## Site
+
+The images the site shows beside the viewer, from CS2's own files (`lib/site.mjs` lists them):
+the Competitive rank icons (`skillgroup0` unranked to `skillgroup18` Global Elite, and
+`skillgroup_none`), the Steam logo, each map's strip, and the chicken the homepage video is
+rendered with.
+
+```sh
+tools/rip-site.sh          # raw/site/: the 20 icons (PNG, 200×80), the logo (SVG), the chicken (GLB, every clip)
+node tools/build-site.mjs  # site/ranks/skillgroup<N>.webp, site/steam-logo.svg, site/maps/<map>.webp, site/build.json
+node tools/shrink-chicken.mjs   # raw/site/chicken.glb: chick_idle01, chick_walk and chick_runflap, 512 px WebP, meshopt
+node tools/check-site.mjs  # the icons and strips as built, the logo an SVG without script, the chicken ≤ 1.5 MB
+node tools/manifest.mjs site
+```
+
+A map's strip is the picture behind its rows on a player's profile (the match list and the map
+table, `web/src/site/profile/strip.ts`): the map's `maps/<map>/hero.png` (`hero.sh`, CS2's own
+screenshot) cut to its middle band at four to one, a 640×160 WebP at quality 70 (`MAP_STRIP`),
+9 to 17 KB a map (119 KB for the ten), where the hero.png is about 1 MB. The page darkens it to
+a fifth at most and fades it to black, so it needs no more. `build-site.mjs` makes one for every
+map folder with a hero.png, records each with the sha256 of the hero.png it came from in
+`build.json` (`maps`), and removes the strip of a map whose hero.png is gone; it reads only
+`maps/`, so a map built since (`build-assets.sh` runs `hero.sh` per map, then every kind) needs
+only this step again. `check-site.mjs` fails a strip that is not a 640×160 WebP of the size
+`build.json` records, one over 32 KB, one made from an older hero.png than the one beside the
+map, and a map with a hero.png and no strip. The manifest lists them as `maps`, `{ "<map>":
+{ file, bytes, sha256 } }`; one written before them has none, and the page then leaves every row
+plain black, as it does a map without a strip. To make them again (after `hero.sh`) and check
+them before a sync:
+
+```sh
+node tools/build-site.mjs && node tools/check-site.mjs && node tools/manifest.mjs site && node tools/manifest.mjs root
+tools/sync-assets.sh --dry-run   # site/maps/<map>.webp go in pass 1, site/manifest.json in pass 2
+```
+
+The shrunk chicken stays under `raw/`: it is never served, only rendered into the homepage video,
+which `tools/home-video.sh` writes to `site/home/` (`hero.mp4`, `hero.webm`, `poster.jpg`) and
+then writes the site manifest again; the manifest lists the video (`home`) once all three files
+are there, and `build-site.mjs` never touches `site/home/`.
+
+### The homepage video
+
+A 10 s seamless loop rendered frame by frame from the viewer: the chicken idles in CT mid on
+Dust 2 while three kills from IEM Cologne 2026 happen behind it, and the camera circles it once a
+loop, slowing as each kill plays and quickening through the cuts. `home-video/shots.json` holds
+every number (the demos, rounds and ticks, the camera's distance and height per moment, the orbit
+and the replay's speed ramp, the depth of field); `home-video.mjs` turns it into 600 frames and
+captures them; `home-video.sh` does the rest:
+
+```sh
+cargo build --release -p demoviewer-server   # in server/
+(cd web && npm run build)
+HOME_VIDEO_DEMOS=~/.local/share/demoviewer/demos/pro tools/home-video.sh
+```
+
+It starts the release server on a free port with a temp data dir, uploads the two demos through
+the API, and shoots each frame in headless Chromium (Playwright, the GPU through ANGLE/Vulkan,
+muted, preset high, `hud=0`): the replay seeked to a fractional tick, the free camera, the
+chicken (`window.__demoviewer.loadProp`/`poseProp`, served to the page from
+`raw/site/chicken.glb`, so nothing Valve-made goes into `web/`), the depth of field, then a draw
+and a canvas screenshot. Then it encodes `hero.mp4` (H.264 High, CRF 23, raised until it fits
+4 MB), `hero.webm` (VP9, two passes, CRF 32) and `poster.jpg` (the first frame) into
+`site/home/`, writes the site manifest, and stops the server by its PID. `HOME_VIDEO_SERVER`
+names another server binary (a worktree's own target directory).
+
 ## Manifests
 
 ```sh
@@ -1852,7 +1920,7 @@ reads what the build wrote, but it does need `node` for those checks.
 | `lib/gltf.mjs`  | `createIO()` (NodeIO with all extensions and the meshopt codec, warnings printed once each), `countTris(doc)` (per node instance), `listMaterialsFailing(doc, map?)`, `stripAttributes(doc, names)` (`JOINTS_n`/`WEIGHTS_n` only off meshes no skinned node draws); re-exports `MeshoptEncoder`, `MeshoptDecoder`, `MeshoptSimplifier`. |
 | `shrink-map.mjs` | `<map>`: `world.glb`, `hull.glb`, `entities.glb` on maps with doors or breakables, `shrink.json`, and with a bake `lightmap.webp`, `probes.bin`, `light.json` (see Shrinking a map). |
 | `radar.mjs`     | `<map>`: `radar.png`, `radar_lower.png` when the map has a lower section, `overview.json` (see Radar and overview); exports `buildRadar(map, rawDir, outDir)`. |
-| `hero.sh` / `hero.mjs` | `<map>... \| all`: CS2's own screenshot of the map (pak01 `panorama/images/map_icons/screenshots/1080p/<map>_png.vtex_c`) as `hero.png`, 1200×630 cropped to cover, the background of the match preview card the server draws for Discord; in no manifest (the browser never loads it). A map CS2 has no screenshot of is reported and skipped (its card shows the radar). `hero.mjs <screenshot.png> <out.png>` exports `buildHero(src, out)`. |
+| `hero.sh` / `hero.mjs` | `<map>... \| all`: CS2's own screenshot of the map (pak01 `panorama/images/map_icons/screenshots/1080p/<map>_png.vtex_c`) as `hero.png`, 1200×630 cropped to cover, the background of the match preview card the server draws for Discord; in no manifest (the browser never loads it: `build-site.mjs` makes the profile's 640×160 strip of it). A map CS2 has no screenshot of is reported and skipped (its card shows the radar). `hero.mjs <screenshot.png> <out.png>` exports `buildHero(src, out)`. |
 | `check-map.mjs` | `<map> [--budget-override]`: budget table for `assets/maps/<map>/`; exit 1 on any failing row. The rows are `checkMap(map, { paths, budget })`'s, which `test/gates.test.mjs` runs over fixture maps, as it does each gate's below. |
 | `lib/report.mjs` | The gates' table: `row`, `warnRow`, `collector()` (a gate's rows as it adds them), `failures(rows)`, `reportLines(title, rows)`, `exitWithReport(title, rows)` (prints, exits 1 on any FAIL). |
 | `lib/players.mjs` | `PLAYER_MODELS`, `SIDES`, `CLIP_SET` (the allow list by family), `WEAPON_CLIP_SUFFIX`, `WEAPON_SHOOT_CLIP`, `CLIPS_REQUIRED`, `CLIPS_OPTIONAL`, `CLIPS_REQUESTED`, `TRANSLATED_BONES`, `WORLD_CLIP_PREFIX`, `PLAYER_DROP_NODE`, `clipBase(name)`, `worldClipBases(doc)`, `selectThirdPerson(doc)`, `stripBoneChannels(doc)`, `disposeClip(anim)`, `orphanSamplers(doc)`, `playerPaths(side)`. |

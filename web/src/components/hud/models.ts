@@ -9,6 +9,7 @@ import {
   type MatchHeader,
   type Pack,
 } from '../../pack/types';
+import { profilePath } from '../../links';
 import { highlightLabel, highlightsOf } from '../../sim/highlights';
 import { newPlayerState, playerStateAt, sampleIndex } from '../../sim/sample';
 import type { PlayerStats } from '../../sim/stats';
@@ -354,7 +355,7 @@ export function scoreCell(row: ScoreRow, col: ScoreColumn): string {
 export interface ScoreRow {
   index: number;
   name: string;
-  /** The player's Steam profile; null for a bot. */
+  /** The player's profile on the site (`/profiles/<steamid>`); null for a bot. */
   profile: string | null;
   kills: number;
   assists: number;
@@ -371,7 +372,7 @@ export interface ScoreRow {
   /** Health damage to enemies from grenades and fire. */
   utilityDamage: number;
   flashAssists: number;
-  /** HLTV 2.0 approximation over the decided rounds; null before the first. */
+  /** The rating (`sim/rating.ts`) over the decided rounds; null before the first. */
   rating: number | null;
   /** Money at the tick; null when the pack has none. */
   money: number | null;
@@ -385,23 +386,6 @@ export interface ScoreTeam {
   team: Team;
   score: number;
   rows: ScoreRow[];
-}
-
-/**
- * The SteamID64s of individual accounts: 76561197960265728 plus the account number, 1 to
- * 2^32 − 1. From account 2,039,734,272 on they start 7656120…, so it is a range, not a
- * prefix. A bot's is 0.
- */
-const STEAMID64_MIN = 76561197960265729n;
-const STEAMID64_MAX = 76561202255233023n;
-
-/** The Steam Community profile of `steamid`, or null when it is not a SteamID64 (a bot). */
-export function steamProfileUrl(steamid: string): string | null {
-  if (!/^\d{17}$/.test(steamid)) return null;
-  const id = BigInt(steamid);
-  return id >= STEAMID64_MIN && id <= STEAMID64_MAX
-    ? `https://steamcommunity.com/profiles/${steamid}`
-    : null;
 }
 
 /** Both teams of the round, CT first, each by kills (then fewer deaths), with its score. */
@@ -432,7 +416,7 @@ export function scoreboardRows(
           {
             index,
             name: p.name,
-            profile: steamProfileUrl(p.steamid),
+            profile: profilePath(p.steamid),
             kills: s?.kills ?? 0,
             assists: s?.assists ?? 0,
             deaths: s?.deaths ?? 0,
@@ -598,20 +582,29 @@ export interface FeedRow {
 export const ROUND_FEED_S = 12;
 export const ROUND_FEED_ROWS = 4;
 
-/** The round's latest events (throws, plant, defuse, kills), oldest first: as the killfeed. */
+/**
+ * The round's latest events (throws, plant, defuse, and kills unless `kills` is false: the HUD
+ * leaves them to the killfeed beside it), oldest first: as the killfeed.
+ */
 export function roundFeedRows(
   tl: Timeline,
   round: number,
   tick: number,
-  playing: boolean
+  playing: boolean,
+  kills = true
 ): FeedRow[] {
   const window = ROUND_FEED_S * tl.pack.header.tick_rate;
-  const items = tl.feed(round, tick, ROUND_FEED_ROWS);
-  // `feed` is a slice of the round's cached `allFeed`: its first item's place there numbers
-  // every row by its place in the whole round, which a new event does not shift.
-  const from = items.length > 0 ? tl.allFeed(round).indexOf(items[0]) : 0;
+  // The last rows at or before `tick`, each keyed by its place in the round's whole feed, which
+  // a new event does not shift.
+  const all = tl.allFeed(round);
+  const items: { f: (typeof all)[number]; at: number }[] = [];
+  for (let i = all.length - 1; i >= 0 && items.length < ROUND_FEED_ROWS; i--) {
+    const f = all[i];
+    if (f.tick > tick || (!kills && f.kind === 'kill')) continue;
+    items.push({ f, at: i });
+  }
   return items
-    .map((f, i) => ({ f, at: from + i }))
+    .reverse()
     .filter(({ f }) => !playing || tick - f.tick <= window)
     .map(({ f, at }) => ({
       key: `${round}:${at}`,
@@ -729,6 +722,19 @@ export function mapName(map: string): string {
   return bare.charAt(0).toUpperCase() + bare.slice(1);
 }
 
+/** A Valve region as people write it: `us_north_central` is US North Central. */
+export function regionName(region: string): string {
+  return region
+    .split('_')
+    .filter(Boolean)
+    .map((w) =>
+      w.length <= 2
+        ? w.toUpperCase()
+        : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+    )
+    .join(' ');
+}
+
 /** The map's name and where the match was played, for the top left. */
 export function brandModel(header: Pick<MatchHeader, 'map' | 'server_name'>): {
   map: string;
@@ -738,7 +744,9 @@ export function brandModel(header: Pick<MatchHeader, 'map' | 'server_name'>): {
   const valve = /^Valve Counter-Strike 2 (\S+) Server/.exec(header.server_name);
   return {
     map,
-    place: valve ? `Valve matchmaking, ${valve[1]}` : header.server_name,
+    place: valve
+      ? `Valve matchmaking, ${regionName(valve[1])}`
+      : header.server_name,
   };
 }
 

@@ -10,7 +10,7 @@ mod write;
 pub use read::read;
 pub use types::{
     flags, gear, quant, sample_tick, Event, GrenadeTrack, GroundItem, InventoryChange, MapEntity,
-    MapEntityChange, MapEntityKind, Match, MatchHeader, PlayerInfo, PlayerTrack, RoundInfo,
-    RoundTracks, PACK_VERSION,
+    MapEntityChange, MapEntityKind, Match, MatchHeader, PlayerInfo, PlayerRank, PlayerTrack,
+    RoundInfo, RoundTracks, PACK_VERSION,
 };
 pub use write::{write, write_limited, MAX_PACK_BYTES};

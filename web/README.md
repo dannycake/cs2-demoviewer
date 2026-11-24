@@ -325,7 +325,7 @@ For the match up to the moment shown (`sim/stats.ts`):
 | HS% | Kills that were headshots |
 | UD | Utility damage: the HE grenade's and the fire's |
 | FA | Flash assists (`player_death`'s `assistedflash`; the local Mirage pack carries none) |
-| Rating | The public approximation of HLTV Rating 2.0 from per-round kills, deaths, assists, ADR and KAST, never below 0 |
+| Rating | skunk.club's rating, the one profiles show (`src/sim/rating.ts`, a port of the server's `rating.rs`): per-round kills, survival, KAST, ADR, multi-kill rounds and opening duels won, each divided by its average over the matches the server holds (`rating-norms.json`), weighted 25/20/20/20/10/5 %; 1.00 is the average, never below 0 |
 
 KAST and Rating count only decided rounds (a kill this round shows in K before it shows in the
 rating), and read "–" until the player has one. Then money and equipment. On a phone the

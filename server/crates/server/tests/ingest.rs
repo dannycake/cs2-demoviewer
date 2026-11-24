@@ -417,7 +417,7 @@ async fn download_failures_name_no_path_or_os_error() {
     let res = fetch(closed, "/x.dem", &dir.path().join("out.dem"), MB as u64).await;
     assert_eq!(
         res,
-        Err(UrlError::Io("cannot connect to the replay server".into()))
+        Err(UrlError::Io("cannot connect to the demo server".into()))
     );
 }
 
@@ -595,7 +595,7 @@ fn a_missing_replay_says_it_may_have_expired() {
     for code in [404, 410] {
         let msg = UrlError::Http(code).to_string();
         assert!(msg.contains("expired"), "{msg}");
-        assert!(msg.contains("about a month"), "{msg}");
+        assert!(msg.contains(&format!("HTTP {code}")), "{msg}");
     }
     assert_eq!(
         UrlError::Http(503).to_string(),

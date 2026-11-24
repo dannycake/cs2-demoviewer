@@ -1,7 +1,7 @@
 /* The round summary under the round bar: the reel banner's dark surface with hairline edges
-   and one radius, in em of --hud-size like the rest of the HUD. Labels are lower case and
-   tracked; each side's rows carry its colour on the left edge, as the highlights panel's do;
-   the MVP takes the system's brand mark; money is the player card's green. */
+   and square corners, in em of --hud-size like the rest of the HUD. Each side's rows carry its
+   colour on the left edge, as the highlights panel's do; the MVP takes the system's brand mark;
+   money is the player card's green (--ok). */
 
 .panel {
   display: flex;
@@ -11,10 +11,10 @@
   padding: 0.6em 0.8em 0.7em;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.9);
+  background: var(--panel-strong);
   box-shadow: var(--shadow-overlay);
   font-family: var(--font-family-sans);
-  font-size: calc(var(--hud-size, 14px) * 0.8);
+  font-size: max(var(--fs-label), calc(var(--hud-size, 14px) * 0.8));
   color: var(--text);
   pointer-events: auto;
   user-select: none;
@@ -35,8 +35,6 @@
 }
 
 .round {
-  letter-spacing: var(--track-label);
-  text-transform: lowercase;
   color: var(--text-mute);
 }
 
@@ -48,7 +46,6 @@
 
 .reason {
   color: var(--text-dim);
-  text-transform: lowercase;
 }
 
 .close {
@@ -67,14 +64,11 @@
     color var(--ease);
 }
 
-.close:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.close:focus-visible {
-  outline: 1px solid var(--brand);
-  outline-offset: 1px;
+@media (hover: hover) {
+  .close:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
 }
 
 .mvp {
@@ -87,8 +81,6 @@
 
 .mvpLabel,
 .tag {
-  letter-spacing: var(--track-label);
-  text-transform: lowercase;
   color: var(--brand);
 }
 
@@ -111,9 +103,14 @@
   overflow-x: auto;
 }
 
+/* Names and headers are words, in the panel's Archivo; the cells' figures are mono. */
 .table {
   border-collapse: collapse;
+}
+
+.table td {
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
 }
 
 .table th,
@@ -124,10 +121,8 @@
 }
 
 .table thead th {
-  font-size: 0.85em;
+  font-size: max(var(--fs-micro), 0.85em);
   font-weight: 400;
-  letter-spacing: var(--track-label);
-  text-transform: lowercase;
   color: var(--text-mute);
 }
 
@@ -162,15 +157,18 @@ tr[data-alive='false'] .nameText {
 
 .tag {
   margin-left: 0.5em;
-  font-size: 0.85em;
+  font-size: max(var(--fs-micro), 0.85em);
 }
 
 .money {
-  color: #8fd48f;
+  color: var(--ok);
+  font-family: var(--mono);
 }
 
+/* The buys are silhouettes, and words for the armour and the kit: Archivo. */
 .table td.buys {
   text-align: left;
+  font-family: var(--sans);
 }
 
 .icons {

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-// App's routing between the upload page and the viewer: the viewer as soon as its chunk is in,
-// the upload page kept until then, and a view that fails giving way to the error screen until
+// App's routing between the home page and the viewer: the viewer as soon as its chunk is in,
+// the home page kept until then, and a view that fails giving way to the error screen until
 // the route changes. Both views are stubbed, and the viewer's chunk loads when the test says
 // (`chunk`).
 
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { useEffect, type ComponentType } from 'react';
 import {
   afterEach,
@@ -16,29 +16,30 @@ import {
   type MockInstance,
 } from 'vitest';
 import ErrorBoundary from '../src/components/ErrorBoundary';
+import { dropPre, preShown, putPre } from './helpers/pre';
 
 /**
  * The viewer's chunk: in once `arrive()` is called, or failed once `fail()` is; whether the
- * viewer throws in render; how often an upload page was mounted.
+ * viewer throws in render; how often a home page was mounted.
  */
 const chunk = vi.hoisted(() => ({
   arrive: () => {},
   fail: (() => {}) as (e: unknown) => void,
   arrived: Promise.resolve(),
   broken: false,
-  uploadMounts: 0,
+  homeMounts: 0,
 }));
 
 vi.mock('../src/chunk', () => ({
   importOrReload: <T,>(load: () => Promise<T>) => chunk.arrived.then(load),
 }));
 
-vi.mock('../src/views/UploadView', () => ({
-  default: function UploadView() {
+vi.mock('../src/site/HomeView', () => ({
+  default: function HomeView() {
     useEffect(() => {
-      chunk.uploadMounts++;
+      chunk.homeMounts++;
     }, []);
-    return <div data-testid="upload-view" />;
+    return <div data-testid="home-view" />;
   },
 }));
 
@@ -55,7 +56,7 @@ async function freshApp(): Promise<ComponentType> {
   return (await import('../src/App')).default;
 }
 
-/** Moves the app to `path` as the upload page's openDemo does, or as Back does. */
+/** Moves the app to `path` as the home page's openDemo does, or as Back does. */
 async function go(path: string) {
   await act(async () => {
     history.pushState(null, '', path);
@@ -71,7 +72,7 @@ beforeEach(() => {
     chunk.fail = reject;
   });
   chunk.broken = false;
-  chunk.uploadMounts = 0;
+  chunk.homeMounts = 0;
   // React reports each caught error too.
   errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -80,33 +81,45 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   history.replaceState(null, '', '/');
+  dropPre();
 });
 
 describe('App', () => {
-  it('keeps the upload page up while the viewer’s chunk loads', async () => {
+  it("drops the server's body, of the address the page was loaded at, when the route changes", async () => {
+    putPre();
+    const App = await freshApp();
+    render(<App />);
+    expect(preShown()).toBe(true);
+    await go('/d/demo1');
+    await waitFor(() => expect(preShown()).toBe(false));
+  });
+
+  it('keeps the home page up while the viewer’s chunk loads', async () => {
     const App = await freshApp();
     const { container } = render(<App />);
-    expect(screen.getByTestId('upload-view')).toBeTruthy();
+    expect(screen.getByTestId('home-view')).toBeTruthy();
 
     // An upload done: openDemo, before the chunk is in.
     await go('/d/demo1');
-    expect(screen.getByTestId('upload-view')).toBeTruthy();
+    expect(screen.getByTestId('home-view')).toBeTruthy();
     expect(container.childElementCount).toBe(1);
 
     await act(async () => chunk.arrive());
     expect((await screen.findByTestId('demo-view')).textContent).toBe('demo1');
-    expect(screen.queryByTestId('upload-view')).toBeNull();
+    expect(screen.queryByTestId('home-view')).toBeNull();
     // The same upload page all along, not one made again.
-    expect(chunk.uploadMounts).toBe(1);
+    expect(chunk.homeMounts).toBe(1);
   });
 
-  it('shows nothing on a demo’s own link until the chunk is in', async () => {
+  it('shows only a loading bar on a demo’s own link until the chunk is in', async () => {
     history.replaceState(null, '', '/d/demo1');
     const App = await freshApp();
     const { container } = render(<App />);
-    expect(container.childElementCount).toBe(0);
+    expect(container.childElementCount).toBe(1);
+    expect(screen.getByRole('progressbar', { name: 'Loading' })).toBeTruthy();
     await act(async () => chunk.arrive());
     expect((await screen.findByTestId('demo-view')).textContent).toBe('demo1');
+    expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
   it('shows the viewer as soon as its chunk is in, without the 300 ms React holds a lazy reveal to', async () => {
@@ -136,12 +149,12 @@ describe('App', () => {
     expect(
       screen.getByText('Failed to fetch dynamically imported module')
     ).toBeTruthy();
-    // Back to the upload page.
+    // Back to the home page.
     await go('/');
-    expect(screen.getByTestId('upload-view')).toBeTruthy();
+    expect(screen.getByTestId('home-view')).toBeTruthy();
   });
 
-  it('goes back to the upload page from the error screen', async () => {
+  it('goes back to the home page from the error screen', async () => {
     chunk.broken = true;
     chunk.arrive();
     history.replaceState(null, '', '/d/demo1');
@@ -161,7 +174,7 @@ describe('App', () => {
     ).toBe(true);
 
     await go('/');
-    expect(screen.getByTestId('upload-view')).toBeTruthy();
+    expect(screen.getByTestId('home-view')).toBeTruthy();
     expect(screen.queryByText('Something went wrong')).toBeNull();
 
     // And a demo again tries the viewer again.

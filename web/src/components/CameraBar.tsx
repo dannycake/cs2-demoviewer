@@ -40,7 +40,7 @@ export default function CameraBar({ compact = false }: { compact?: boolean }) {
         <button
           key={mode}
           type="button"
-          className={styles.button}
+          className={`${styles.button} ${styles.mode}`}
           aria-pressed={camera === mode}
           disabled={mode === 'pov' && !hasPlayers}
           title={`${label} camera (${key})`}
@@ -53,7 +53,7 @@ export default function CameraBar({ compact = false }: { compact?: boolean }) {
       <span className={styles.divider} aria-hidden="true" />
       <button
         type="button"
-        className={styles.button}
+        className={`${styles.button} ${styles.toggle}`}
         aria-pressed={director}
         disabled={!hasPlayers}
         title="Director: picks who to follow (A)"
@@ -64,7 +64,7 @@ export default function CameraBar({ compact = false }: { compact?: boolean }) {
       </button>
       <button
         type="button"
-        className={styles.button}
+        className={`${styles.button} ${styles.toggle}`}
         aria-pressed={radar}
         disabled={!hasPack}
         title="Radar: the whole map from above (R)"
@@ -75,7 +75,7 @@ export default function CameraBar({ compact = false }: { compact?: boolean }) {
       </button>
       <button
         type="button"
-        className={styles.button}
+        className={`${styles.button} ${styles.toggle}`}
         aria-pressed={highlights}
         aria-haspopup="dialog"
         disabled={!hasPack}

@@ -46,6 +46,7 @@ import { SIDES } from './lib/players.mjs';
 import { writeJsonAtomic } from './lib/stage.mjs';
 import { armsPaths, VIEWMODEL_DIRS } from './lib/viewmodels.mjs';
 import { MODEL_NAMES, WEAPON_NAMES } from './lib/weapons.mjs';
+import { HOME_FILES, RANK_KEYS, sitePaths } from './lib/site.mjs';
 import { PHONE_WORLD, phonePlayer } from './phone-tier.mjs';
 
 export const SCHEMA = 1;
@@ -362,6 +363,45 @@ export async function effectsManifest(outDir, rawDir) {
 }
 
 /**
+ * The manifest of assets/site/ (not written): each rank icon and the Steam logo as
+ * `{ file, bytes, sha256 }` (paths under site/), each map's strip by map (`maps`, sorted; none
+ * from a build.json made before them), and the homepage video's three files once all three
+ * are there (`home`, else null). Refuses a missing icon or strip, one whose size differs from
+ * build.json, and a build.json made from another rip.
+ */
+export async function siteManifest(outDir, rawDir) {
+  const P = { ...sitePaths(), out: outDir, raw: rawDir, buildJson: path.join(outDir, 'build.json'), ripJson: path.join(rawDir, 'rip.json') };
+  const rip = readJson(P.ripJson, 'run tools/rip-site.sh');
+  const build = ripBuild(rip, P.ripJson);
+  const built = readJson(P.buildJson, 'run tools/build-site.mjs');
+  if (built.cs2Build !== build.cs2Build) {
+    throw new Error(`${P.buildJson} was made from CS2 build ${built.cs2Build}, ${P.ripJson} is ${build.cs2Build}; rerun tools/build-site.mjs`);
+  }
+  const entry = async (file, bytes) => {
+    const full = path.join(outDir, file);
+    if (!fs.existsSync(full)) throw new Error(`${full} is missing; run tools/build-site.mjs`);
+    const e = await fileEntry(full);
+    if (bytes !== undefined && e.bytes !== bytes) throw new Error(`${file} is ${e.bytes} bytes but ${P.buildJson} records ${bytes}; rerun tools/build-site.mjs`);
+    return { file, ...e };
+  };
+  const ranks = {};
+  for (const key of RANK_KEYS) {
+    const b = built.ranks?.[key];
+    if (!b) throw new Error(`${P.buildJson} has no rank ${key}; rerun tools/build-site.mjs`);
+    ranks[key] = await entry(b.file, b.bytes);
+  }
+  const steamLogo = await entry(built.steamLogo.file, built.steamLogo.bytes);
+  // A build.json from before the strips has none.
+  const maps = {};
+  for (const map of Object.keys(built.maps ?? {}).sort()) maps[map] = await entry(built.maps[map].file, built.maps[map].bytes);
+  const homeThere = Object.values(HOME_FILES).every((f) => fs.existsSync(path.join(outDir, f)));
+  const home = homeThere
+    ? { mp4: await entry(HOME_FILES.mp4), webm: await entry(HOME_FILES.webm), poster: await entry(HOME_FILES.poster) }
+    : null;
+  return { schema: SCHEMA, cs2Build: build.cs2Build, vrf: build.vrf, generated: now(), ranks, steamLogo, maps, home };
+}
+
+/**
  * The manifest of assets/sounds/ (not written): per bank of build.json, sorted, `{ bytes, sha256,
  * seconds }`, and build.json's `sounds` (each key's bank and layers, the clips as `[offset,
  * duration]` seconds into the bank) and `surfaces` (surface name → step set) as they are.
@@ -472,6 +512,10 @@ export const KIND_MANIFESTS = Object.freeze({
       const kb = (f) => `${(fs.statSync(f).size / 1e3).toFixed(1)} KB`;
       return `${Object.keys(m.banks).length} banks, ${mb(Object.values(m.banks).reduce((n, b) => n + b.bytes, 0))}, ${Object.keys(m.sounds).length} sounds (the manifest ${kb(file)}, ${kb(`${file}.gz`)} gz); build ${m.cs2Build}, VRF ${m.vrf}`;
     },
+  },
+  site: {
+    build: siteManifest,
+    line: (m) => `${Object.keys(m.ranks).length} rank icons, ${(Object.values(m.ranks).reduce((n, r) => n + r.bytes, 0) / 1e3).toFixed(1)} KB, the Steam logo, ${Object.keys(m.maps).length} map strips, ${(Object.values(m.maps).reduce((n, r) => n + r.bytes, 0) / 1e3).toFixed(1)} KB, ${m.home ? `the homepage video (${mb(m.home.mp4.bytes)} mp4)` : 'no homepage video'}; build ${m.cs2Build}, VRF ${m.vrf}`,
   },
 });
 

@@ -76,6 +76,10 @@ impl RateLimiter {
         let mut hits = self.hits.lock().unwrap_or_else(|e| e.into_inner());
         hits.sweep(now);
         for &(key, limit) in &keys {
+            // A limit of none allows none (a client with no hits yet has no queue to compare).
+            if limit == 0 {
+                return false;
+            }
             if let Some(q) = hits.by_key.get_mut(&key) {
                 prune(q, now);
                 if q.len() >= limit {
@@ -252,6 +256,13 @@ mod tests {
         assert!(!rl.check(ip("203.0.113.7"), t0 + Duration::from_secs(59 * 60)));
         // Another address has its own budget.
         assert!(rl.check(ip("203.0.113.8"), t0 + Duration::from_secs(59 * 60)));
+    }
+
+    #[test]
+    fn a_limit_of_none_allows_none() {
+        let rl = RateLimiter::new(0);
+        assert!(!rl.check(ip("203.0.113.7"), Instant::now()));
+        assert!(!rl.check(ip("2001:db8::1"), Instant::now()));
     }
 
     #[test]

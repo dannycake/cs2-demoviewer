@@ -1,5 +1,5 @@
-//! `/api` handlers: chunked uploads, URL and share-code ingest, demo status (with the match
-//! summary) and packs, and what the site offers.
+//! `/api` handlers: chunked uploads, URL, share-code and FACEIT match ingest, demo status (with
+//! the match summary) and packs, and what the site offers.
 //!
 //! The handlers are adapters: what a request may start is decided by [`crate::admission`], in
 //! one order for every ingest path, and an upload's chunks are kept by [`crate::uploads`].
@@ -27,12 +27,21 @@ use tokio_util::io::ReaderStream;
 use crate::admission::Admission;
 use crate::config::Config;
 use crate::errors::{blocking, Panicked};
+use crate::faceit::FaceitError;
 use crate::gcbot::ResolveError;
+use crate::hidden::Hidden;
+use crate::history::MatchHistory;
+use crate::identity::{classify, faceit_match_id, Input};
 use crate::ingest;
 use crate::jobs::{Job, Jobs};
-use crate::ratelimit::client_ip;
+use crate::profiles::ProfileCache;
+use crate::ratelimit::{client_ip, RateLimiter};
+use crate::sessions::Sessions;
 use crate::sharecode;
+use crate::steam::SteamApi;
 use crate::store::{self, valid_id, DemoRecord, Source, Status, Store, WorkFiles};
+use crate::tracker::TrackerHandle;
+use crate::tracking::Tracking;
 use crate::uploads::{self, UploadMeta, Uploads, PUTS_PER_CHUNK, SPARE_PUTS};
 
 /// What every handler can reach.
@@ -48,6 +57,36 @@ pub struct AppState {
     pub uploads: Arc<Uploads>,
     /// Held while a match page's preview image is drawn, so only one is drawn at a time.
     pub drawing: Arc<tokio::sync::Mutex<()>>,
+    /// The Steam Web API, with a key ([`Config::steam_api_key`]).
+    pub steam: Option<Arc<SteamApi>>,
+    /// FACEIT's Data API, with a key ([`Config::faceit_api_key`]): FACEIT nicknames in the one
+    /// input, and the demos of FACEIT matches posted by their room links.
+    pub faceit: Option<Arc<dyn crate::faceit::FaceitData>>,
+    /// Steam's facts about accounts, and custom URL names.
+    pub profiles: Arc<ProfileCache>,
+    /// Profiles taken off the site.
+    pub hidden: Arc<Hidden>,
+    /// Lookups that may ask Steam or FACEIT, per client ([`Config::lookups_per_hour`]): player
+    /// lookups, and FACEIT room links the site has no record for ([`ingest_faceit_match`]).
+    pub lookups: Arc<RateLimiter>,
+    /// Signed-in sessions ([`crate::auth`]).
+    pub sessions: Arc<Sessions>,
+    /// Sign-ins under way ([`crate::auth::SignIns`]).
+    pub sign_ins: Arc<crate::auth::SignIns>,
+    /// For confirming a sign-in with Steam.
+    pub http: reqwest::Client,
+    /// Tracked players ([`crate::tracking`]).
+    pub tracking: Arc<Tracking>,
+    /// The tracker, when this server can track (a Steam key and a tracking key).
+    pub tracker: Option<TrackerHandle>,
+    /// Steam's match histories, to check a link's code and tokens (with the tracker).
+    pub history: Option<Arc<dyn MatchHistory>>,
+    /// The sitemaps, built from the store and kept for [`crate::sitemap::TTL`].
+    pub sitemaps: Arc<crate::sitemap::SitemapCache>,
+    /// IndexNow submissions; `None` without a key and a public URL.
+    pub indexnow: Option<Arc<crate::indexnow::IndexNow>>,
+    /// Tracked players' FACEIT histories, which the FACEIT poller writes and a profile shows.
+    pub faceit_histories: Arc<crate::faceit_history::FaceitHistory>,
 }
 
 /// The `/api` routes, to be nested under `/api`. Unknown paths answer a JSON 404.
@@ -60,6 +99,10 @@ pub fn routes() -> Router<AppState> {
         .route("/demos/{id}", get(get_demo))
         .route("/demos/{id}/pack", get(get_pack))
         .route("/site", get(get_site))
+        .merge(crate::players_api::routes())
+        .merge(crate::events::routes())
+        .merge(crate::auth::api_routes())
+        .merge(crate::me_api::routes())
         .fallback(|| async { ApiError::new(StatusCode::NOT_FOUND, "not found") })
 }
 
@@ -303,15 +346,19 @@ async fn complete_upload(
     Ok((StatusCode::ACCEPTED, Json(json!({ "demoId": demo_id }))).into_response())
 }
 
-// ---- URL and share-code ingest, and demos -----------------------------------------------
+// ---- URL, share-code and FACEIT match ingest, and demos ---------------------------------
 
-/// `POST /demos`: a URL to fetch or a share code to look up, exactly one of them.
+/// `POST /demos`: a URL to fetch, a share code to look up or a FACEIT match to fetch the demo
+/// of, exactly one of them.
 #[derive(Deserialize)]
 struct NewDemo {
     #[serde(default)]
     url: Option<String>,
     #[serde(default)]
     sharecode: Option<String>,
+    /// FACEIT's id of a match, or its room link ([`ingest_faceit_match`]).
+    #[serde(default, rename = "faceitMatch")]
+    faceit_match: Option<String>,
 }
 
 const MAX_URL_LEN: usize = 2048;
@@ -324,12 +371,13 @@ async fn create_demo(
 ) -> Result<Response, ApiError> {
     let Json(req) = body.map_err(bad_json)?;
     let ip = client_ip(&headers, peer, &s.cfg.trusted_proxies);
-    match (req.url, req.sharecode) {
-        (Some(url), None) => ingest_url(&s, ip, &url).await,
-        (None, Some(text)) => ingest_sharecode(&s, ip, &text).await,
+    match (req.url, req.sharecode, req.faceit_match) {
+        (Some(url), None, None) => ingest_url(&s, ip, &url).await,
+        (None, Some(text), None) => ingest_sharecode(&s, ip, &text).await,
+        (None, None, Some(text)) => ingest_faceit_match(&s, ip, &text).await,
         _ => Err(ApiError::new(
             StatusCode::BAD_REQUEST,
-            "send either a url or a sharecode",
+            "send one of a url, a sharecode or a faceitMatch",
         )),
     }
 }
@@ -426,8 +474,122 @@ async fn ingest_sharecode(s: &AppState, ip: IpAddr, text: &str) -> Result<Respon
     Ok((StatusCode::ACCEPTED, Json(json!({ "demoId": r.id }))).into_response())
 }
 
-/// The answer for a share code whose match already has demo `r`, once `r` is on disk (another
-/// post may have made it a moment ago).
+/// A FACEIT match, by FACEIT's id of it or its room link (`text`, see [`faceit_match_id`] and
+/// [`classify`]): `400` past [`MAX_URL_LEN`], as for a URL; then, after the client's attempt
+/// limit (`429`), `503` when this server has no FACEIT key; `400` for text that names no FACEIT
+/// match; the demo this match brought when the site has it or is getting it (`200 cached` once
+/// done, `202` before), without asking FACEIT or spending the client's ingests or lookups;
+/// `507` below the free-space floor and `429`/`503` without a place among the jobs on their way
+/// to the parse worker, as for a URL; `429` when the client has no ingest left, or no lookup
+/// ([`AppState::lookups`], which nickname lookups spend too). Then FACEIT is asked for the
+/// match (one call, through its gate): `404` when FACEIT has no such match, `503` when it does
+/// not answer, and `422` when it gives no demo this server may download (none yet, or one on a
+/// host off the allowlist [`ingest::check_url`] keeps, which takes no FACEIT host while
+/// [`ingest::FACEIT_DEMO_HOSTS`] is empty); each of those gives the ingest and the place back
+/// and makes no record, but keeps the lookup spent, so posting a refused room again and again
+/// takes at most the client's lookups of FACEIT's gate, which the poller and the profiles share.
+/// Else, for one of the client's ingests, a `Queued` FACEIT record, played when FACEIT says the
+/// match finished, and a URL job for the first demo FACEIT gives (`202`), which holds the
+/// place. One record per match ([`Store::claim_faceit`]), so a room posted by many at once is
+/// downloaded once: posts that missed each other each ask FACEIT, and all but the one that made
+/// the record are repeats, which spend no ingest.
+async fn ingest_faceit_match(s: &AppState, ip: IpAddr, text: &str) -> Result<Response, ApiError> {
+    if text.len() > MAX_URL_LEN {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "the link is too long",
+        ));
+    }
+    let attempt = s.admission.attempt(ip)?;
+    let Some(faceit) = &s.faceit else {
+        return Err(ApiError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "this server does not take FACEIT links: upload the demo instead",
+        ));
+    };
+    let text = text.trim();
+    let id = match classify(text) {
+        Input::FaceitMatch(id) => Some(id),
+        _ => faceit_match_id(text),
+    }
+    .ok_or_else(|| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "that is not a FACEIT match room link",
+        )
+    })?;
+
+    if let Some(r) = s.store.find_faceit(&id) {
+        return Ok(known_match(s, r).await);
+    }
+    // Before FACEIT is asked, so a client out of places or ingests costs FACEIT nothing; every
+    // refusal below drops the ticket, which gives both back.
+    let ticket = attempt
+        .room(s.cfg.max_upload_bytes)?
+        .fetch_place()?
+        .ingest()?;
+    // FACEIT's answer is not remembered, so a refused room would otherwise be asked about on
+    // every post (review 2026-10-31).
+    if !s.lookups.check(ip, Instant::now()) {
+        return Err(ApiError::new(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many lookups from here; try again later",
+        ));
+    }
+    let detail = match faceit.match_detail(&id).await {
+        Ok(Some(detail)) => detail,
+        Ok(None) => {
+            return Err(ApiError::new(
+                StatusCode::NOT_FOUND,
+                "FACEIT has no match at that link",
+            ))
+        }
+        Err(FaceitError::RateLimited) => {
+            return Err(ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "FACEIT is busy; try again in a minute",
+            ))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, faceit_match = %id, "a FACEIT match lookup failed");
+            return Err(ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "FACEIT is not answering; try again in a minute",
+            ));
+        }
+    };
+    let url = detail
+        .demo_urls
+        .first()
+        .and_then(|u| ingest::check_url(u).ok())
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "FACEIT demos must be uploaded",
+            )
+        })?;
+    let (r, created) = s
+        .store
+        .claim_faceit(&id, &Store::new_id(), detail.finished_unix);
+    if !created {
+        // Another post of the match got there while FACEIT was asked: this one is a repeat after
+        // all, and the dropped ticket gives the ingest and the place back.
+        drop(ticket);
+        return Ok(known_match(s, r).await);
+    }
+    // Not the URL, whose query may be FACEIT's signature.
+    tracing::info!(demo = %r.id, faceit_match = %id, %ip, "FACEIT match queued");
+    s.jobs.enqueue(Job::Url {
+        demo_id: r.id.clone(),
+        url,
+        slot: Some(ticket.commit()),
+    });
+    s.store.saved().await;
+    Ok((StatusCode::ACCEPTED, Json(json!({ "demoId": r.id }))).into_response())
+}
+
+/// The answer for a match (posted by its share code or its FACEIT room) that already has demo
+/// `r`, once `r` is on disk (another post may have made it a moment ago).
 async fn known_match(s: &AppState, r: DemoRecord) -> Response {
     s.store.saved().await;
     if r.status != Status::Done {
@@ -491,8 +653,9 @@ async fn get_demo(
     }))
 }
 
-/// What the web app may offer. Nothing is listed (link only), so the one question is whether a
-/// share code can be pasted.
+/// What the web app may offer. Matches are listed on their players' profiles and on tournament
+/// pages, never in a site-wide index, so the one question is whether a share code can be
+/// pasted.
 #[derive(Serialize)]
 struct SiteView {
     /// A share-code service is configured and online.
@@ -516,7 +679,7 @@ async fn get_pack(
     let sha = r
         .sha256
         .ok_or_else(|| ApiError::internal("cannot serve the pack", "done demo without a sha"))?;
-    let file = match tokio::fs::File::open(s.store.pack_path(&sha)).await {
+    let mut file = match tokio::fs::File::open(s.store.pack_path(&sha)).await {
         Ok(f) => f,
         // Evicted between the index update and this request, or removed by hand.
         Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -533,6 +696,9 @@ async fn get_pack(
         .await
         .map_err(|e| ApiError::internal("cannot serve the pack", e))?
         .len();
+    let inflated = inflated_size(&mut file)
+        .await
+        .map_err(|e| ApiError::internal("cannot serve the pack", e))?;
     s.store.touch_pack(&sha);
     Ok((
         [
@@ -543,8 +709,24 @@ async fn get_pack(
                 "public, max-age=31536000, immutable".to_owned(),
             ),
             (header::CONTENT_LENGTH, len.to_string()),
+            // What the browser inflates it to, so the viewer's progress has a total.
+            (
+                header::HeaderName::from_static("x-pack-size"),
+                inflated.to_string(),
+            ),
         ],
         Body::from_stream(ReaderStream::with_capacity(file, 1 << 16)),
     )
         .into_response())
+}
+
+/// A gzip file's inflated size, from its trailer (the size modulo 2^32: a pack is far
+/// smaller), the file left at its start.
+async fn inflated_size(file: &mut tokio::fs::File) -> std::io::Result<u32> {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    file.seek(std::io::SeekFrom::End(-4)).await?;
+    let mut trailer = [0u8; 4];
+    file.read_exact(&mut trailer).await?;
+    file.rewind().await?;
+    Ok(u32::from_le_bytes(trailer))
 }

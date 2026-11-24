@@ -21,6 +21,8 @@ import { fetchBytes, SoundBanks } from '../audio/banks';
 import { SoundDirector, type SoundDebug } from '../audio/director';
 import { contextFor, listenForGestures, SoundEngine } from '../audio/engine';
 import type { Scene } from '../scene/Scene';
+import type { PropPose } from '../scene/prop';
+import type { FreePose } from '../router';
 import { browserFrames, startLoop, type FrameScheduler } from '../state/clock';
 import { renderCounts } from '../state/derive';
 import { isMobileDevice } from '../state/device';
@@ -58,6 +60,16 @@ export interface DebugHandle {
   effectsBloom: (on: boolean) => void;
   /** The sound director's counts, live (`SoundDirector.debug`). */
   readonly sound?: SoundDebug;
+  /** Loads a GLB prop into the scene (`Scene.loadProp`); for the homepage video's render. */
+  loadProp: (url: string) => ReturnType<Scene['loadProp']>;
+  /** Poses the prop (`Scene.poseProp`). */
+  poseProp: (p: PropPose | null) => void;
+  /** Puts the free camera at a pose (`Scene.setFreePose`). */
+  setFreePose: (p: FreePose) => void;
+  /** Draws the store's moment now, as the clock loop would next frame. */
+  drawNow: () => void;
+  /** The depth of field (`Scene.setDof`). */
+  setDof: (o: { focus: number; scale: number; max: number } | null) => void;
 }
 
 declare global {
@@ -230,6 +242,11 @@ export function useDebugHandle(
       get sound() {
         return director.current?.debug;
       },
+      loadProp: (url) => scene().loadProp(url),
+      poseProp: (p) => scene().poseProp(p),
+      setFreePose: (p) => scene().setFreePose(p),
+      drawNow: () => drawMoment(scene()),
+      setDof: (o) => scene().setDof(o),
     };
     window.__demoviewer = handle;
     return () => {

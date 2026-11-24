@@ -1,0 +1,77 @@
+/* The legal page (the mockup legal-v4): a column of boxes. */
+/* The column is as tall as its boxes, not the page: a box ends under its text. */
+.page {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px 56px;
+}
+
+.legal {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  max-width: 680px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.legal > * {
+  margin: 0;
+  background: var(--bg);
+}
+
+.title {
+  padding: 18px 20px 16px;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.cell {
+  padding: 18px 20px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+.cell b {
+  display: block;
+  color: var(--tx);
+  font-weight: 600;
+}
+
+.mail {
+  display: block;
+  margin: 4px 0 8px;
+  color: var(--tx);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.mail:hover {
+  color: var(--red-ink);
+}
+
+.mail:focus-visible {
+  outline-offset: 2px;
+}
+
+@container (max-width: 560px) {
+  .page {
+    padding: 0 0 32px;
+  }
+
+  .legal {
+    border: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mail {
+    font-size: 19px;
+  }
+}

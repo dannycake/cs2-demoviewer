@@ -175,8 +175,8 @@ describe('Viewport', () => {
     });
     expect(ready()).toBe('true');
     expect(screen.getAllByRole('alert').map((a) => a.textContent)).toEqual([
-      'the de_mirage world did not load: world.glb: 500',
-      'the player models did not load: ct.glb: 500',
+      'The Mirage world did not load: world.glb: 500',
+      'The player models did not load: ct.glb: 500',
     ]);
   });
 
@@ -193,7 +193,7 @@ describe('Viewport', () => {
     ]);
     expect(ready()).toBe('false');
     await act(async () => s.rigs[1].resolve());
-    expect(screen.getByRole('status').textContent).toBe('loading the world…');
+    expect(screen.getByRole('status').textContent).toBe('Loading the world…');
     await act(async () => s.maps[1].resolve());
     expect(ready()).toBe('true');
     expect(screen.queryByRole('status')).toBeNull();

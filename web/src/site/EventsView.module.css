@@ -1,0 +1,181 @@
+/* The tournaments pages: a column of black cells on hairlines, as the profile's rows. */
+.page {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px 56px;
+}
+
+.box {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  max-width: 880px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.box > * {
+  margin: 0;
+  background: var(--bg);
+}
+
+.title {
+  padding: 18px 20px 16px;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.cell {
+  padding: 18px 20px;
+  color: var(--dim);
+}
+
+.cell a,
+.item a,
+.replay {
+  color: var(--tx);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cell a:hover,
+.item a:hover,
+.replay:hover {
+  color: var(--red-ink);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 20px;
+  height: 56px;
+  padding: 0 20px;
+}
+
+.dim {
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.head,
+.match {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 70px minmax(0, 1fr) 80px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 20px;
+}
+
+.head.teamed,
+.match.teamed {
+  grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1.4fr) 70px minmax(
+      0,
+      1fr
+    ) 80px;
+}
+
+/* No match of the tournament has a day of its own: the Date column goes. Its cell stays in the
+   markup, so the rules below that count columns count the same ones. */
+.undated > :first-child {
+  display: none;
+}
+
+.head.undated,
+.match.undated {
+  grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1fr) 80px;
+}
+
+.head.teamed.undated,
+.match.teamed.undated {
+  grid-template-columns:
+    minmax(0, 1fr) minmax(0, 1.4fr) 70px minmax(0, 1fr)
+    80px;
+}
+
+.head {
+  height: 36px;
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.match {
+  height: 56px;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.match a {
+  color: var(--tx);
+  text-decoration: none;
+}
+
+.match a:hover {
+  color: var(--red-ink);
+}
+
+.top,
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+@media (max-width: 600px) {
+  .head,
+  .match {
+    grid-template-columns: 84px minmax(0, 1fr) 54px 70px;
+    gap: 10px;
+    padding: 0 14px;
+  }
+
+  .head.teamed,
+  .match.teamed {
+    grid-template-columns: 84px minmax(0, 1fr) 54px 70px;
+  }
+
+  .head.undated,
+  .match.undated,
+  .head.teamed.undated,
+  .match.teamed.undated {
+    grid-template-columns: minmax(0, 1fr) 54px 70px;
+  }
+
+  .head span:nth-child(4),
+  .top {
+    display: none;
+  }
+
+  /* With a Teams column the top fragger is the fifth, and neither it nor the teams fit. */
+  .head.teamed span:nth-child(3),
+  .head.teamed span:nth-child(5) {
+    display: none;
+  }
+
+  .head.teamed span:nth-child(4) {
+    display: inline;
+  }
+
+  .item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    height: auto;
+    padding: 12px 14px;
+    gap: 4px 14px;
+  }
+
+  .item > :last-child {
+    grid-column: 1 / -1;
+  }
+}

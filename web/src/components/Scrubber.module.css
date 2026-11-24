@@ -46,7 +46,9 @@
   background: var(--text-mute);
 }
 
-.input {
+/* As tall as the scrubber, for the pointer; under .scrubber, so it outranks the global range's
+   14 px. */
+.scrubber .input {
   position: relative;
   width: 100%;
   height: 100%;
@@ -57,57 +59,64 @@
   cursor: pointer;
 }
 
-.input:disabled {
+.scrubber .input:disabled {
   cursor: default;
 }
 
-.input::-webkit-slider-runnable-track {
+/* Under .scrubber, so these outrank the global range rules (styles/tokens.css: a 2 px track
+   with the brand up to `--fill`), which are for the settings' sliders. */
+.scrubber .input::-webkit-slider-runnable-track {
   height: var(--track-h);
   background: transparent;
 }
 
-.input::-moz-range-track {
+.scrubber .input::-moz-range-track {
   height: var(--track-h);
   background: transparent;
 }
 
-.input::-webkit-slider-thumb {
+.scrubber .input::-moz-range-progress {
+  background: transparent;
+}
+
+.scrubber .input::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: var(--thumb);
   height: var(--thumb);
   margin-top: calc((var(--track-h) - var(--thumb)) / 2);
-  border-radius: 2px;
+  border-radius: var(--r);
   background: var(--text);
   border: 0;
 }
 
-.input::-moz-range-thumb {
+.scrubber .input::-moz-range-thumb {
   width: var(--thumb);
   height: var(--thumb);
-  border-radius: 2px;
+  border-radius: var(--r);
   background: var(--text);
   border: 0;
 }
 
-.input:disabled::-webkit-slider-thumb {
+.scrubber .input:disabled::-webkit-slider-thumb {
   visibility: hidden;
 }
 
-.input:disabled::-moz-range-thumb {
+.scrubber .input:disabled::-moz-range-thumb {
   visibility: hidden;
 }
 
+/* Keyboard focus rings the thumb, in the system's ring (styles/tokens.css). */
 .input:focus-visible {
   outline: none;
 }
 
-.input:focus-visible::-webkit-slider-thumb {
-  outline: 1px solid var(--brand);
+.scrubber .input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
 }
 
-.input:focus-visible::-moz-range-thumb {
-  outline: 1px solid var(--brand);
+.scrubber .input:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
 }
 
@@ -140,12 +149,12 @@
 .event[data-kind='death'] {
   top: -9px;
   transform: rotate(45deg);
-  border-radius: 1px;
+  border-radius: var(--r);
   background: var(--team);
 }
 
 .event[data-kind='death'] {
-  background: #ff5f52;
+  background: var(--brand-ink);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
 }
 
@@ -155,8 +164,8 @@
   width: 8px;
   height: 8px;
   margin-left: -4px;
-  border-radius: 2px;
-  background: #ff5f52;
+  border-radius: var(--r);
+  background: var(--brand-ink);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
 }
 
@@ -172,21 +181,21 @@
   width: 2px;
   height: 5px;
   margin-left: -1px;
-  border-radius: 1px;
-  background: #c8ced6;
+  border-radius: var(--r);
+  background: var(--text-dim);
   opacity: 0.8;
 }
 
 .event[data-kind='flash'] {
-  background: #fff6c8;
+  background: var(--text);
 }
 
 .event[data-kind='he'] {
-  background: #ff6a4a;
+  background: var(--danger);
 }
 
 .event[data-kind='fire'] {
-  background: #ff9a3a;
+  background: var(--warn);
 }
 
 /* After the round is decided the game runs on to the next round's start: that stretch is
@@ -202,10 +211,18 @@
 }
 
 /* Narrow (state/device): a row of its own above the transport's controls, 44 px high, with a
-   thumb a finger can find. */
+   thumb a finger can find; on its side, between the round and the clock, to keep the screen's
+   height for the match. */
 [data-narrow='true'] .scrubber {
   --thumb: 16px;
   order: -1;
   flex: 1 0 100%;
   height: 44px;
+}
+
+@media (orientation: landscape) {
+  [data-narrow='true'] .scrubber {
+    order: 0;
+    flex: 1 1 auto;
+  }
 }

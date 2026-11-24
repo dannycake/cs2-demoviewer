@@ -1,6 +1,6 @@
 // First person, over the scene: the followed player's own crosshair (decoded from their share
 // code, at the size they set it for their screen height), or the scope's lens when they are
-// scoped in. Nothing in the other cameras.
+// scoped in. Nothing in the other cameras, nor over the full radar.
 
 import { useEffect, useMemo, useRef } from 'react';
 import { crosshairLook, decodeCrosshair } from '../../sim/crosshair';
@@ -53,6 +53,7 @@ export default function PovOverlay() {
         tick: s.tick,
         camera: s.camera,
         follow: shownAt(s),
+        radar: s.radar,
       }),
     [],
     sameOverlay

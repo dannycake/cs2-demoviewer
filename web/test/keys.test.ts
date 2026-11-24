@@ -6,6 +6,7 @@ import { handleKey, keyAction } from '../src/state/keys';
 import { createPlaybackStore } from '../src/state/store';
 import { playbackPack, threeRoundStore } from './helpers/playback-pack';
 import { event } from './helpers/track-pack';
+import { scoreboardKey } from '../src/components/hud/scoreboard-state';
 
 const key = (code: string, k = '') => ({ code, key: k });
 
@@ -618,5 +619,25 @@ describe('reel keys', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('scoreboardKey', () => {
+  const down = { key: 'Tab', type: 'keydown', repeat: false };
+  it('holds the scoreboard on Tab with no control focused, and lets it go on release', () => {
+    expect(scoreboardKey(down)).toBe('hold');
+    expect(scoreboardKey({ ...down, type: 'keyup' })).toBe('release');
+  });
+
+  it('leaves a press of Tab on a control to move the focus, and holds once it repeats', () => {
+    expect(scoreboardKey(down, false)).toBeNull();
+    expect(scoreboardKey({ ...down, repeat: true }, false)).toBe('hold');
+  });
+
+  it('never takes Shift+Tab, which moves the focus back', () => {
+    expect(scoreboardKey({ ...down, shiftKey: true })).toBeNull();
+    expect(
+      scoreboardKey({ ...down, shiftKey: true, repeat: true }, false)
+    ).toBeNull();
   });
 });

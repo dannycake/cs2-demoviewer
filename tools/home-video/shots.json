@@ -1,0 +1,20 @@
+{
+  "fps": 60,
+  "width": 1920,
+  "height": 1080,
+  "seconds": 10,
+  "startFrame": 300,
+  "demos": {
+    "spirit": "natus-vincere-vs-spirit-m1-dust2.dem",
+    "falcons": "natus-vincere-vs-falcons-m1-dust2.dem"
+  },
+  "chicken": { "at": [-450, 2080, -128], "clip": "chick_idle01", "middle": 0.17 },
+  "orbit": { "azimuth0": -45, "ease": 9, "fov": 40, "lowerThird": 10 },
+  "speed": { "kill": 0.42, "cut": 1.05 },
+  "dof": { "scale": 11, "max": 8 },
+  "moments": [
+    { "name": "A", "demo": "spirit", "round": 5, "tick": 47705, "R": 1.6, "h": 0.22, "face": 205 },
+    { "name": "B", "demo": "falcons", "round": 10, "tick": 97144, "R": 1.7, "h": 0.26, "face": 145 },
+    { "name": "C", "demo": "falcons", "round": 2, "tick": 20944, "R": 1.5, "h": 0.18, "face": 85 }
+  ]
+}

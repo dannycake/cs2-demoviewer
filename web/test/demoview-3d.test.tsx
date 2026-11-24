@@ -112,7 +112,7 @@ async function open(url: string) {
 }
 
 /** The 3D view's note while its chunk is on its way. */
-const loadingNote = () => screen.queryByText('loading the 3D view…');
+const loadingNote = () => screen.queryByText('Loading the 3D view');
 
 beforeEach(async () => {
   vi.resetModules();
@@ -173,7 +173,7 @@ describe('DemoView and the 3D view', () => {
 
     act(() => playbackStore.getState().setCamera('pov'));
     // In the tap's own render, before anything of the chunk is in.
-    expect(loadingNote()?.getAttribute('role')).toBe('status');
+    expect(loadingNote()?.closest('[role="status"]')).toBeTruthy();
     await waitFor(() => expect(shared.viewportLoads).toBe(1));
     expect(screen.queryByTestId('viewport')).toBeNull();
     expect(loadingNote()).toBeTruthy();
@@ -203,7 +203,9 @@ describe('DemoView and the 3D view', () => {
     shared.hold = new Promise((r) => (release = r));
     window.history.replaceState(null, '', '/d/demo1');
     render(<DemoView demoId="demo1" />);
-    expect(loadingNote()).toBeTruthy();
+    // One loading panel at a time: the match's, while the pack is on its way.
+    expect(loadingNote()).toBeNull();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(await screen.findByTestId('viewport')).toBeTruthy();
     expect(playbackStore.getState().pack).toBeNull();
     release();
@@ -232,10 +234,10 @@ describe('DemoView and the 3D view', () => {
 
     const note = await screen.findByTestId('panel-error');
     expect(note.textContent).toBe(
-      'the 3D view stopped working · reload the page'
+      'The 3D view stopped working · Reload the page'
     );
     expect(
-      screen.getByRole('link', { name: 'reload the page' }).getAttribute('href')
+      screen.getByRole('link', { name: 'Reload the page' }).getAttribute('href')
     ).toBe(window.location.href);
     expect(loadingNote()).toBeNull();
     expect(screen.getByTestId('transport')).toBeTruthy();

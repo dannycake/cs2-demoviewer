@@ -338,8 +338,9 @@ describe('rootManifest', () => {
     writeJson(path.join(s.outDir, 'manifest.json'), await soundsManifest(s.outDir, s.rawDir));
 
     const m = await rootManifest(root);
-    expect(Object.keys(m)).toEqual(['schema', 'generated', 'maps', 'players', 'weapons', 'viewmodels', 'effects', 'sounds']);
+    expect(Object.keys(m)).toEqual(['schema', 'generated', 'maps', 'players', 'weapons', 'viewmodels', 'effects', 'sounds', 'site']);
     expect(m.sounds).toEqual({ cs2Build: '2000935', banks: 2 });
+    expect(m.site).toBeNull();
     expect(m.effects).toEqual({ cs2Build: '2000935', count: EFFECT_KEYS.length, bytes: Object.values(em.atlases).reduce((n, a) => n + a.bytes, 0) });
     expect(m.weapons).toEqual({ cs2Build: '2000934', count: MODEL_NAMES.length });
     expect(m.viewmodels).toEqual({ cs2Build: '2000934', arms: ['ct', 't'], count: WEAPON_NAMES.length });

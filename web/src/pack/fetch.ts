@@ -22,7 +22,7 @@ export class PackLoadError extends Error {
  * Fetches a pack, reporting bytes received, then inflates (if still gzip) and parses it.
  * `total` is null when unknown: with `Content-Encoding: gzip` the browser hands over the
  * inflated stream while `Content-Length` counts the compressed bytes, so the two cannot be
- * compared.
+ * compared; the inflated size is then `X-Pack-Size`, where the server sends it.
  */
 export async function fetchPack(
   url: string,
@@ -47,10 +47,14 @@ const tooLarge = () =>
   new PackLoadError('this replay is too large to open', null);
 
 function bodyTotal(res: Response): number | null {
+  const size = (name: string) => {
+    const n = Number(res.headers.get(name) ?? NaN);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+  };
   const encoding = res.headers.get('content-encoding');
-  if (encoding && encoding.toLowerCase() !== 'identity') return null;
-  const length = Number(res.headers.get('content-length') ?? NaN);
-  return Number.isSafeInteger(length) && length > 0 ? length : null;
+  if (encoding && encoding.toLowerCase() !== 'identity')
+    return size('x-pack-size');
+  return size('content-length');
 }
 
 async function readBody(

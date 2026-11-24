@@ -6,6 +6,7 @@ import { countRender, useDerived } from '../../state/derive';
 import { playbackStore } from '../../state/store';
 import { reelBanner } from './models';
 import styles from './ReelBanner.module.css';
+import Digits from './Digits';
 
 export default function ReelBanner() {
   countRender('ReelBanner');
@@ -25,7 +26,9 @@ export default function ReelBanner() {
       aria-label={b.kind === 'killcam' ? 'Kill cam' : 'Highlights'}
     >
       <span className={styles.info} aria-live="polite">
-        <span className={styles.title}>{b.title}</span>
+        <span className={styles.title}>
+          <Digits text={b.title} />
+        </span>
         {b.position && <span className={styles.position}>{b.position}</span>}
       </span>
       {b.canNext && (

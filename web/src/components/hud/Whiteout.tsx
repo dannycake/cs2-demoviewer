@@ -1,6 +1,6 @@
 // The flash whiteout: the screen goes white while the followed player is blind, in POV, held
 // for the first 40 % of the blindness and then fading (`sim/impacts.ts`). Whether it shows is
-// a render; how white is written to the element every frame.
+// a render; how white is written to the element every frame. Not over the full radar.
 
 import { useRef } from 'react';
 import { timelineFor } from '../../sim/timeline';
@@ -10,7 +10,7 @@ import { whiteoutAlpha } from './models';
 import styles from './hud.module.css';
 
 function alphaOf(s: Playback): number {
-  return s.pack
+  return s.pack && !s.radar
     ? whiteoutAlpha(timelineFor(s.pack), s.round, s.tick, shownAt(s), s.camera)
     : 0;
 }

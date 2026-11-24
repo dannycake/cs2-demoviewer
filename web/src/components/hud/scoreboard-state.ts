@@ -19,11 +19,20 @@ export const useScoreboard = create<ScoreboardState>((set) => ({
   close: () => set({ held: false, pinned: false }),
 }));
 
-/** What a key press means for the scoreboard, if anything. */
+/**
+ * What a key press means for the scoreboard, if anything. Tab is the keyboard's way between
+ * controls too: it holds the scoreboard when no control has focus (`onPage`: the page or the 3D
+ * view), or once held down on one (its repeat), and never with Shift.
+ */
 export function scoreboardKey(
-  e: Pick<KeyboardEvent, 'key' | 'type' | 'repeat'>
+  e: Pick<KeyboardEvent, 'key' | 'type' | 'repeat'> & { shiftKey?: boolean },
+  onPage = true
 ): 'hold' | 'release' | 'close' | null {
-  if (e.key === 'Tab') return e.type === 'keydown' ? 'hold' : 'release';
+  if (e.key === 'Tab') {
+    if (e.type !== 'keydown') return 'release';
+    if (e.shiftKey) return null;
+    return onPage || e.repeat ? 'hold' : null;
+  }
   if (e.key === 'Escape' && e.type === 'keydown') return 'close';
   return null;
 }

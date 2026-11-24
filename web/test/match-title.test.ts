@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { MatchSummary } from '../src/api/demos';
-import { matchDate, matchTitle } from '../src/match-title';
+import {
+  matchPageTitle,
+  matchTabTitle,
+  matchTitle,
+} from '../src/match-title';
 
 /** A summary as `GET /api/demos/{id}` gives it: CT won 13–9 on Mirage. */
 function summary(over: Partial<MatchSummary> = {}): MatchSummary {
@@ -46,17 +50,31 @@ describe('matchTitle', () => {
   });
 });
 
-describe('matchDate', () => {
-  it('is the UTC day the match was played', () => {
-    expect(matchDate(summary({ playedUnix: 1792627199 }))).toBe('2026-10-21');
+describe('matchPageTitle', () => {
+  it('names the tournament, as the server does', () => {
+    expect(matchPageTitle(summary({ event: 'iem_cologne_major_2026' }))).toMatch(
+      / · IEM Cologne Major 2026$/
+    );
   });
 
-  it('falls back to when the demo was stored', () => {
-    expect(matchDate(summary())).toBe('2026-10-22');
-    expect(matchDate(summary({ createdUnix: 1767220200 }))).toBe('2025-12-31');
+  it('says it is a CS2 replay without a tournament', () => {
+    expect(matchPageTitle(summary())).toMatch(/ · CS2 replay$/);
   });
 
-  it('is empty for a time no date can show', () => {
-    expect(matchDate(summary({ createdUnix: 1e20 }))).toBe('');
+  it('leads with the teams when they are known', () => {
+    expect(
+      matchPageTitle(
+        summary({ teams: ['Spirit', 'Falcons'], event: 'pgl_astana_2026' })
+      )
+    ).toMatch(/^Spirit vs Falcons · .* · PGL Astana 2026$/);
+  });
+});
+
+describe('matchTabTitle', () => {
+  it('names the teams as the server does, when there are any', () => {
+    expect(matchTabTitle(summary({ teams: ['Spirit', 'Falcons'] }))).toBe(
+      'Spirit vs Falcons · Mirage 13–9'
+    );
+    expect(matchTabTitle(summary())).toBe('Mirage 13–9');
   });
 });

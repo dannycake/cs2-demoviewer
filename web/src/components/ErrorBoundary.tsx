@@ -71,12 +71,12 @@ export default class ErrorBoundary extends Component<Props, State> {
           title={error}
           data-testid="panel-error"
         >
-          {region} stopped working
+          {region.charAt(0).toUpperCase() + region.slice(1)} stopped working
           {reload && (
             <>
               {' · '}
               <a href={window.location.href} onClick={reloadNow}>
-                reload the page
+                Reload the page
               </a>
             </>
           )}

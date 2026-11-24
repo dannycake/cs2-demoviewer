@@ -15,6 +15,7 @@ import { countRender, useDerived } from '../../state/derive';
 import { useSettings } from '../../state/settings';
 import { playbackStore } from '../../state/store';
 import { REASON_TEXT, reasonGlyph } from './models';
+import Digits from './Digits';
 import WeaponIcon from './WeaponIcon';
 import styles from './RoundSummary.module.css';
 
@@ -70,7 +71,9 @@ export default function RoundSummary() {
       data-testid="round-summary"
     >
       <header className={styles.head}>
-        <span className={styles.round}>Round {number}</span>
+        <span className={styles.round}>
+          <Digits text={`Round ${number}`} />
+        </span>
         <span className={styles.result} data-team={s.winner || undefined}>
           {s.winner ? `${SIDE[s.winner]} win` : 'No winner'}
         </span>
@@ -98,7 +101,9 @@ export default function RoundSummary() {
         <p className={styles.mvp} data-team={mvp.team}>
           <span className={styles.mvpLabel}>MVP</span>
           <span className={styles.mvpName}>{mvp.name}</span>
-          <span className={styles.why}>{why(s.mvp, mvp)}</span>
+          <span className={styles.why}>
+            <Digits text={why(s.mvp, mvp)} />
+          </span>
         </p>
       )}
       <div className={styles.body}>

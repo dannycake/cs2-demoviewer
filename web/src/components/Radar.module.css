@@ -1,16 +1,17 @@
-/* The minimap: a square of 14em of the HUD size, on the HUD's panel surface; the full view fills
-   the viewport behind the HUD. */
+/* The minimap: a square the left column's width (DemoView's --left-col: the match line and the
+   player list line up with it), on the HUD's panel surface; the full view fills the viewport
+   behind the HUD. */
 
 .mini {
   display: block;
   flex-shrink: 0;
-  width: 14em;
-  height: 14em;
+  width: var(--left-col, 14em);
+  height: var(--left-col, 14em);
   padding: 0;
   font-size: var(--hud-size, 14px);
   border: 1px solid var(--line-soft);
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.86);
+  background: var(--panel);
   overflow: hidden;
   cursor: zoom-in;
   pointer-events: auto;
@@ -18,11 +19,6 @@
 
 .mini[hidden] {
   display: none;
-}
-
-.mini:focus-visible {
-  outline: 1px solid var(--brand);
-  outline-offset: 2px;
 }
 
 .full {
@@ -63,7 +59,6 @@
 /* A short window keeps the whole player list in view under the minimap. */
 @media (max-height: 800px) {
   .mini {
-    width: 11em;
-    height: 11em;
+    height: calc(var(--left-col, 14em) * 0.8);
   }
 }

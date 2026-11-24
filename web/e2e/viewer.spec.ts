@@ -2,11 +2,12 @@ import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { DemoStatus } from '../src/api/demos';
-import { eyePoint } from '../src/geo/coords';
-import { matchDate, matchTitle } from '../src/match-title';
+import { eyePoint, viewDir } from '../src/geo/coords';
+import { matchPageTitle } from '../src/match-title';
 import { SOURCE_URL } from '../src/links';
 import { inflateIfGzip, parsePack } from '../src/pack/reader';
 import { pageTitle } from '../src/router';
+import { FREE_FROM_POV } from '../src/scene/cameras';
 import { newPlayerState, playerStateAt } from '../src/sim/sample';
 import { SETTINGS_KEY } from '../src/state/settings';
 import { animationFrames } from './wait';
@@ -46,6 +47,34 @@ test.skip(
   'set DEMOVIEWER_E2E_DEMO=<demo id of the Mirage pack> with the server running'
 );
 
+test('a name on the scoreboard opens the player’s profile in this tab, and the way back finds the scoreboard closed', async ({
+  page,
+}) => {
+  const errors = trackErrors(page);
+  await page.goto(`/d/${demoId}?r=1`);
+  const viewport = page.getByTestId('viewport');
+  await expect(viewport).toHaveAttribute('data-ready', 'true', {
+    timeout: 90_000,
+  });
+  // Opened by a click on the player card, so the pointer can reach the names.
+  await page.locator('[data-scoreboard-toggle]').click();
+  const board = page.getByRole('dialog', { name: 'Scoreboard' });
+  const name = board.getByRole('link').first();
+  const href = (await name.getAttribute('href'))!;
+  expect(href).toMatch(/^\/profiles\/\d{17}$/);
+  const pages = page.context().pages().length;
+  await name.click();
+  await expect(page).toHaveURL(new RegExp(`${href}$`));
+  await expect(page.getByTestId('who')).toBeVisible();
+  expect(page.context().pages()).toHaveLength(pages);
+  await page.goBack();
+  await expect(viewport).toHaveAttribute('data-ready', 'true', {
+    timeout: 90_000,
+  });
+  await expect(board).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('plays the Mirage demo from a URL position', async ({ page, request }) => {
   const res = await request.get(`/api/demos/${demoId}/pack`);
   expect(res.ok()).toBe(true);
@@ -69,24 +98,20 @@ test('plays the Mirage demo from a URL position', async ({ page, request }) => {
     await request.get(`/api/demos/${demoId}`)
   ).json()) as DemoStatus;
   expect(summary).not.toBeNull();
-  await expect(page).toHaveTitle(/ — Mirage \d+–\d+ — \d{4}-\d{2}-\d{2}$/);
   await expect(page).toHaveTitle(
-    pageTitle(matchTitle(summary!), matchDate(summary!))
+    /^Mirage \d+–\d+ · \d{4}-\d{2}-\d{2} · skunk\.club$/
   );
+  await expect(page).toHaveTitle(pageTitle(matchPageTitle(summary!)));
 
-  // Held Tab, the scoreboard links every player's Steam profile, in a new tab.
+  // Held Tab, the scoreboard links every player's profile on the site, in this tab.
   await page.keyboard.down('Tab');
   const profiles = page
     .getByRole('dialog', { name: 'Scoreboard' })
     .getByRole('link');
   await expect(profiles).toHaveCount(10);
   for (const link of await profiles.all()) {
-    await expect(link).toHaveAttribute(
-      'href',
-      /^https:\/\/steamcommunity\.com\/profiles\/\d{17}$/
-    );
-    await expect(link).toHaveAttribute('target', '_blank');
-    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(link).toHaveAttribute('href', /^\/profiles\/\d{17}$/);
+    await expect(link).not.toHaveAttribute('target');
   }
   await page.keyboard.up('Tab');
   await expect(page.getByRole('dialog', { name: 'Scoreboard' })).toHaveCount(0);
@@ -143,14 +168,21 @@ test('plays the Mirage demo from a URL position', async ({ page, request }) => {
     expect(away).toBeLessThan(0.01);
   }
 
-  // Free starts where POV was and flies forward with W.
+  // Free starts behind and above where POV was (out of the player's head) and flies forward
+  // with W.
   await page.keyboard.press('KeyC');
   await expect
     .poll(async () => (await page.evaluate(cameraPose)).mode)
     .toBe('free');
   const free0 = await page.evaluate(cameraPose);
+  const ahead = viewDir(pose.yaw, pose.pitch);
+  const over = {
+    x: pose.x - ahead.x * FREE_FROM_POV.back,
+    y: pose.y - ahead.y * FREE_FROM_POV.back + FREE_FROM_POV.up,
+    z: pose.z - ahead.z * FREE_FROM_POV.back,
+  };
   expect(
-    Math.hypot(free0.x - pose.x, free0.y - pose.y, free0.z - pose.z)
+    Math.hypot(free0.x - over.x, free0.y - over.y, free0.z - over.z)
   ).toBeLessThan(0.05);
   // W held until the camera has flown a metre and more: however long a loaded machine takes.
   const flownFrom0 = async () => {

@@ -59,4 +59,8 @@ describe('povOverlay', () => {
     expect(povOverlay(state({ follow: null })).kind).toBe('none');
     expect(povOverlay(state({ flags: 0 })).kind).toBe('none');
   });
+
+  it('shows nothing over the full radar, which is not first person', () => {
+    expect(povOverlay({ ...state({}), radar: true }).kind).toBe('none');
+  });
 });

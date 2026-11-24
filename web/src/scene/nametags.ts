@@ -8,7 +8,9 @@
 // is drawn once and kept (the label cache holds a name for every player), so playing,
 // scrubbing and seeking make no sprites, materials or textures. A body (a death's last live
 // sample, not alive) has no tag, and no tag takes the fog: inside a smoke it would draw in the
-// smoke's colour.
+// smoke's colour. Given the camera, the tags keep apart and on screen: a name that would run
+// off the side of the view moves in to its edge (its bar stays over the player), and a tag whose
+// name would print over a nearer one's fades to a ghost of a name without its bar.
 
 import * as THREE from 'three';
 import { UNIT, eyePoint } from '../geo/coords';
@@ -66,7 +68,28 @@ export interface TagOptions {
   eye: THREE.Vector3;
   /** Metres per screen pixel at one metre from the camera: 2·tan(fov/2) / screen height. */
   worldPerPixel: number;
+  /** The camera the tags are drawn for, and the view's size in CSS pixels: they keep apart. */
+  camera?: THREE.Camera | null;
+  width?: number;
+  height?: number;
 }
+
+/** A name that would print over a nearer one's is drawn this faint. */
+export const FADED_NAME = 0.25;
+/** The gap a name keeps from the view's edge, in CSS pixels. */
+const EDGE_PX = 4;
+
+/** Where a tag's name is on screen, for keeping tags apart. */
+interface Placed {
+  tag: number;
+  distance: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+const _ndc = new THREE.Vector3();
 
 interface Tag {
   group: THREE.Group;
@@ -80,6 +103,8 @@ export class NameTags {
   /** The names, apart from the grenade labels' cache, so neither evicts the other. */
   private readonly labels: LabelSprites;
   private readonly tags: Tag[] = [];
+  /** The tags shown at the last update, nearest first: made once, reused every frame. */
+  private readonly placed: Placed[] = [];
   /** What a hidden tag's name shows, so it never holds a name the cache may free. */
   private readonly placeholder = new THREE.SpriteMaterial({
     visible: false,
@@ -129,6 +154,7 @@ export class NameTags {
     this.labels.reserve(players.length);
     const depthTest = !o.throughWalls;
     for (const m of this.shared) m.depthTest = depthTest;
+    let shown = 0;
     for (let i = 0; i < this.tags.length; i++) {
       const tag = this.tags[i];
       const s = states[i];
@@ -168,6 +194,87 @@ export class NameTags {
       tag.fill.material = this.fills[team];
       tag.fill.scale.set(TAG.bar.wPx * px * health, TAG.bar.hPx * px, 1);
       tag.fill.center.set(0.5 / health, 0);
+      tag.name.center.x = 0.5;
+      tag.bar.visible = tag.fill.visible = true;
+      name.opacity = 1;
+      if (this.placed.length <= shown)
+        this.placed.push({
+          tag: 0,
+          distance: 0,
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+        });
+      const p = this.placed[shown++];
+      p.tag = i;
+      p.distance = tag.group.position.distanceTo(o.eye);
+    }
+    if (o.camera && o.width && o.height) this.keepApart(shown, o);
+  }
+
+  /**
+   * Keeps the `shown` tags of the last update on screen and apart, as `o.camera` draws them in
+   * a view `o.width` × `o.height`: a name moves in from the edge, and the farther of two names
+   * that would print over each other fades, its bar hidden.
+   */
+  private keepApart(shown: number, o: TagOptions): void {
+    const camera = o.camera!;
+    const w = o.width!;
+    const h = o.height!;
+    camera.updateMatrixWorld();
+    const nameW = TAG.namePx * this.labels.aspect;
+    const above = TAG.bar.hPx + TAG.bar.gapPx + TAG.namePx * NAME_EM;
+    const list = this.placed;
+    for (let k = 0; k < shown; k++) {
+      const p = list[k];
+      const tag = this.tags[p.tag];
+      _ndc.copy(tag.group.position).project(camera);
+      const x = ((_ndc.x + 1) / 2) * w;
+      const y = ((1 - _ndc.y) / 2) * h;
+      const material = tag.name.material as THREE.SpriteMaterial;
+      const textW = nameW * ((material.userData.textWidth as number) ?? 1);
+      let shift = 0;
+      // In front of the camera and across the view: its name stays whole on screen.
+      if (_ndc.z < 1 && x >= 0 && x <= w) {
+        if (x - textW / 2 < EDGE_PX) shift = EDGE_PX - (x - textW / 2);
+        else if (x + textW / 2 > w - EDGE_PX)
+          shift = w - EDGE_PX - (x + textW / 2);
+      }
+      tag.name.center.x = 0.5 - shift / nameW;
+      p.left = x + shift - textW / 2;
+      p.right = x + shift + textW / 2;
+      p.top = y - above;
+      p.bottom = y;
+      // Behind the camera, nothing to keep apart from.
+      if (_ndc.z >= 1) p.distance = Infinity;
+    }
+    // Nearest first (sorted in place: a handful, every frame): a name keeps its place against
+    // those farther than it.
+    for (let k = 1; k < shown; k++) {
+      const p = list[k];
+      let j = k - 1;
+      for (; j >= 0 && list[j].distance > p.distance; j--)
+        list[j + 1] = list[j];
+      list[j + 1] = p;
+    }
+    for (let k = 0; k < shown; k++) {
+      const p = list[k];
+      const tag = this.tags[p.tag];
+      let over = false;
+      for (let j = 0; j < k && !over; j++) {
+        const q = list[j];
+        if (q.distance === Infinity || this.tags[q.tag].bar.visible === false)
+          continue;
+        over =
+          p.left < q.right &&
+          q.left < p.right &&
+          p.top < q.bottom &&
+          q.top < p.bottom;
+      }
+      if (!over) continue;
+      (tag.name.material as THREE.SpriteMaterial).opacity = FADED_NAME;
+      tag.bar.visible = tag.fill.visible = false;
     }
   }
 

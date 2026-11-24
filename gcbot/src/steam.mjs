@@ -1,5 +1,6 @@
 // The alt's Steam session: steam-user logged on with the refresh token, "playing" CS2 so that
-// globaloffensive gets a Game Coordinator session, and the GC request a share code becomes.
+// globaloffensive gets a Game Coordinator session, and the GC requests a share code and a
+// player's recent matches become.
 import path from 'node:path';
 import GlobalOffensiveClient from 'globaloffensive';
 import SteamUserClient from 'steam-user';
@@ -15,8 +16,8 @@ const RETRY_MAX_MS = 3_600_000;
  * `refresh-token` and steam-user's own files. Without a usable token it stays offline and says
  * so (`node src/login.mjs` on the desktop makes one).
  *
- * Returns `{ isOnline(), health(), request(code, details, onList), stop() }`; `request` is what
- * createResolver takes.
+ * Returns `{ isOnline(), health(), request(code, details, onList), requestRecent(steamid,
+ * onList), stop() }`; `request` and `requestRecent` are what createResolver takes.
  */
 export function startSteam({
   envToken,
@@ -107,6 +108,21 @@ export function startSteam({
 
   logOn();
 
+  // Sends one GC request and hands `onList(matches, data)` every `matchList` until the function
+  // it returns is called (`data` is the whole message: its msgrequestid and accountid say what
+  // it answers). Throws, listening to nothing, when the request cannot be sent.
+  function ask(onList, send) {
+    const listener = (matches, data) => onList(matches, data);
+    gc.on('matchList', listener);
+    try {
+      send();
+    } catch (err) {
+      gc.off('matchList', listener);
+      throw err;
+    }
+    return () => gc.off('matchList', listener);
+  }
+
   return {
     isOnline: () => loggedOn && gc.haveGCSession === true,
     health: () => ({
@@ -115,19 +131,21 @@ export function startSteam({
       tokenExpiresAt: expiresAt(token)?.toISOString() ?? null,
     }),
     request(code, details, onList) {
-      const listener = (matches) => onList(matches);
-      gc.on('matchList', listener);
-      try {
+      return ask(onList, () =>
         gc.requestGame({
           matchId: details.matchId,
           outcomeId: details.outcomeId,
           token: details.token,
-        });
-      } catch (err) {
-        gc.off('matchList', listener);
-        throw err;
-      }
-      return () => gc.off('matchList', listener);
+        })
+      );
+    },
+    // MatchListRequestRecentUserGames: the list CS2 shows under Watch → Your matches (up to 8).
+    requestRecent(steamid, onList) {
+      return ask(onList, () => {
+        if (gc.requestRecentGames(steamid) === false) {
+          throw new Error(`globaloffensive refused ${steamid} as a player's SteamID`);
+        }
+      });
     },
     stop() {
       stopped = true;

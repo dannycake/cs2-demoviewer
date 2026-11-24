@@ -1,0 +1,82 @@
+.foot {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  gap: 1px;
+  background: var(--line);
+  border-top: 1px solid var(--line);
+}
+
+.foot > * {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 16px;
+  background: var(--bg);
+  color: var(--mute);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* The whole cell is the link. */
+.foot > .link {
+  padding: 0;
+}
+
+.foot a {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  padding: 0 16px;
+  color: var(--dim);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.foot a:hover {
+  background: var(--hover);
+  color: var(--tx);
+}
+
+.mark {
+  width: 22px;
+  height: 19px;
+  background: var(--mark);
+  mask: url('/skunk-mark-solid.svg') no-repeat center / contain;
+}
+
+@container (max-width: 560px) {
+  .foot {
+    grid-template-columns: auto 1fr auto auto auto;
+  }
+
+  .foot > *,
+  .foot a {
+    padding: 0 14px;
+  }
+
+  .foot > .link {
+    padding: 0;
+  }
+
+  .note {
+    font-size: 13px;
+    white-space: normal;
+  }
+}
+
+/* The narrowest phones: tighter cells and a smaller note, so the row of three links still fits. */
+@container (max-width: 380px) {
+  .foot > *,
+  .foot a {
+    padding: 0 8px;
+  }
+
+  .foot > .link {
+    padding: 0;
+  }
+
+  .note {
+    font-size: 12px;
+    line-height: 1.25;
+  }
+}

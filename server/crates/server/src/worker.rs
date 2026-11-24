@@ -30,9 +30,10 @@ use crate::parse::{self, ParseError};
 pub const SUBCOMMAND: &str = "parse-worker";
 
 /// Most of the child's stdout the parent keeps. The outcome line carries the match summary,
-/// whose names are capped ([`matches::MAX_NAME_CHARS`]): this fits over a thousand players with
-/// the longest names, each character escaped.
-const MAX_OUTPUT: u64 = 1024 * 1024;
+/// whose names and weapons are capped ([`matches::MAX_NAME_CHARS`], [`matches::MAX_WEAPONS`]):
+/// this fits over a thousand players with the longest names, each character escaped, and every
+/// weapon.
+const MAX_OUTPUT: u64 = 4 * 1024 * 1024;
 
 /// The child's report, its last line on stdout.
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,7 +69,7 @@ pub fn parse_to_pack(
             "the server could not write the replay pack; try again later".to_owned()
         }
     })?;
-    Ok(matches::summarize(&m))
+    Ok(matches::summarize(&m, false))
 }
 
 fn write_pack(m: &Match, path: &Path) -> io::Result<()> {

@@ -1,0 +1,59 @@
+/* A guide: one readable column of plain text. The body is a fragment of bare p, h2, ol, ul, a
+   and b elements, so it is styled by element here. */
+.page {
+  display: flex;
+  justify-content: center;
+  padding: 40px 16px 56px;
+}
+
+.guide {
+  width: 100%;
+  max-width: 680px;
+  color: var(--dim);
+  line-height: 1.6;
+}
+
+.title {
+  margin: 0 0 20px;
+  color: var(--tx);
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.guide h2 {
+  margin: 28px 0 8px;
+  color: var(--tx);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.guide p,
+.guide ol,
+.guide ul {
+  margin: 0 0 12px;
+}
+
+.guide ol,
+.guide ul {
+  padding-left: 22px;
+}
+
+.guide li {
+  margin-bottom: 6px;
+}
+
+.guide b {
+  color: var(--tx);
+  font-weight: 600;
+}
+
+.guide a {
+  color: var(--tx);
+  text-decoration: underline;
+}
+
+.guide a:hover {
+  color: var(--red-ink);
+}

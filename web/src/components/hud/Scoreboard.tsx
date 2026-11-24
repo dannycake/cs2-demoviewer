@@ -1,10 +1,12 @@
-// Held Tab (or a click on the player card): both teams, CT first, with the stat columns in
+// Held Tab with no control focused, or Tab held down on one (a press on one moves the focus on, as
+// Tab does; or a click on the player card): both teams, CT first, with the stat columns in
 // `SCORE_COLUMNS` order (kills, assists, deaths, the difference, ADR, KAST, headshot share,
 // utility damage, flash assists, rating), money and equipment, for the match up to now. Each
-// name links to the player's Steam profile in a new tab. Compact (the narrow layout), the
-// columns are kills, deaths, ADR and rating, without money and equipment. Opened by a click
-// on the player card, a press anywhere but on it or the card closes it (on a phone, the one
-// way to close it besides the card).
+// player's name links to their profile on the site, followed in this tab as the site's own
+// links are (a ctrl or middle click opens a new one); a bot's is no link. Compact (the narrow
+// layout), the columns are kills, deaths, ADR and rating, without money and equipment. Opened
+// by a click on the player card, a press anywhere but on it or the card closes it (on a phone,
+// the one way to close it besides the card).
 
 import { useEffect, useRef } from 'react';
 import { countRender, useDerived } from '../../state/derive';
@@ -20,6 +22,7 @@ import {
   type ScoreColumn,
 } from './models';
 import { scoreboardKey, useScoreboard } from './scoreboard-state';
+import SiteLink from '../../site/SiteLink';
 import WeaponIcon from './WeaponIcon';
 import styles from './hud.module.css';
 
@@ -39,7 +42,7 @@ const TITLE: Record<ScoreColumn, string> = {
   'HS%': 'Kills that were headshots',
   UD: 'Utility damage',
   FA: 'Flash assists',
-  Rating: 'Rating (an approximation of HLTV 2.0)',
+  Rating: 'Rating, as on profiles (1.00 is the average)',
 };
 
 function closeScoreboard(): void {
@@ -86,7 +89,13 @@ export default function Scoreboard({
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (isTextEntry(e.target)) return;
-      const k = scoreboardKey(e);
+      const focused = document.activeElement;
+      const onPage =
+        !focused ||
+        focused === document.body ||
+        focused === document.documentElement ||
+        focused instanceof HTMLCanvasElement;
+      const k = scoreboardKey(e, onPage);
       if (!k) return;
       const s = useScoreboard.getState();
       if (k === 'hold') {
@@ -108,6 +117,9 @@ export default function Scoreboard({
       window.removeEventListener('keydown', on, true);
       window.removeEventListener('keyup', on, true);
       window.removeEventListener('blur', blur);
+      // Leaving the viewer (a name followed to its profile) closes it: it is not open on the
+      // way back, nor held by a Tab let go of on another page.
+      useScoreboard.getState().close();
     };
   }, []);
 
@@ -168,15 +180,13 @@ export default function Scoreboard({
               <tr key={r.index} data-followed={r.index === follow}>
                 <th scope="row">
                   {r.profile ? (
-                    <a
+                    <SiteLink
                       className={styles.profile}
                       href={r.profile}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Steam profile"
+                      title="Player profile"
                     >
                       {r.name}
-                    </a>
+                    </SiteLink>
                   ) : (
                     r.name
                   )}

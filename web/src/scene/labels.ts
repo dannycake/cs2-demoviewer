@@ -29,18 +29,21 @@ export function shortName(name: string): string {
 export const LABEL_SIZE = { width: 256, height: 96 } as const;
 
 /**
- * How a label is set: `label` centred in the interface's face over an optional name; `mono` one line of
- * monospaced text from the left edge, its middle `MONO_CENTER_Y` up the canvas; `name` one line
- * centred on the canvas, its type `NAME_EM` of the canvas's height, smaller when the text would
- * not fit across. `label` and `mono` are laid out for `LABEL_SIZE`, `name` for any size.
+ * How a label is set: `label` centred in the interface's face for words over an optional name,
+ * smaller when a word would not fit across; `mono` one line of figures in the monospaced face
+ * from the left edge, its middle `MONO_CENTER_Y` up the canvas; `name` one line centred on the
+ * canvas, its type `NAME_EM` of the canvas's height, smaller when the text would not fit across.
+ * `label` and `mono` are laid out for `LABEL_SIZE`, `name` for any size.
  */
 export type LabelStyle = 'label' | 'mono' | 'name';
 /** A `name` label's type size, as a share of its canvas's height. */
 export const NAME_EM = 0.75;
-/** The interface's one face (styles/global.css), with the system monospace fonts behind it. */
-const FACE =
+/** The interface's face for words (styles/tokens.css `--sans`), with the system's behind it. */
+const FACE = 'Archivo, system-ui, sans-serif';
+/** Its face for figures (`--mono`): the damage numbers. */
+const MONO_FACE =
   '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-const MONO_FONT = `600 40px ${FACE}`;
+const MONO_FONT = `600 40px ${MONO_FACE}`;
 /** Where a mono label's line sits, as a sprite `center.y` (0 bottom, 1 top). */
 export const MONO_CENTER_Y = 1 - 32 / LABEL_SIZE.height;
 
@@ -68,14 +71,17 @@ interface Draw {
   lineJoin: string;
 }
 
-/** `text` in one line across the middle of the canvas, as big as `NAME_EM` allows and fits. */
+/**
+ * `text` in one line across the middle of the canvas, as big as `NAME_EM` allows and fits;
+ * returns how much of the canvas's width it takes (1 when the canvas cannot measure).
+ */
 function drawName(
   g: Draw,
   text: string,
   color: string,
   width: number,
   height: number
-): void {
+): number {
   const font = (px: number) => `700 ${px}px ${FACE}`;
   let px = Math.round(height * NAME_EM);
   g.font = font(px);
@@ -91,6 +97,8 @@ function drawName(
   g.strokeText(text, width / 2, height / 2);
   g.fillStyle = color;
   g.fillText(text, width / 2, height / 2);
+  const across = g.measureText ? g.measureText(text).width + px / 6 : width;
+  return Math.min(1, across / width);
 }
 
 export class LabelSprites {
@@ -134,11 +142,19 @@ export class LabelSprites {
       g.lineJoin = 'round';
       g.strokeStyle = 'rgba(0, 0, 0, 0.85)';
     }
-    if (g && style === 'name') drawName(g, text, color, width, height);
+    /** A `name` label's text across its canvas, as a share of its width. */
+    let textWidth = 1;
+    if (g && style === 'name')
+      textWidth = drawName(g, text, color, width, height);
     else if (g) {
       const mono = style === 'mono';
       g.textAlign = mono ? 'left' : 'center';
       g.font = mono ? MONO_FONT : `700 44px ${FACE}`;
+      // A word that would not fit across the label is set smaller.
+      for (let px = 44; !mono && px > 24 && g.measureText; px -= 2) {
+        g.font = `700 ${px}px ${FACE}`;
+        if (g.measureText(text).width <= width - 16) break;
+      }
       g.lineWidth = mono ? 7 : 8;
       const x = mono ? 6 : width / 2;
       g.strokeText(text, x, 32);
@@ -167,6 +183,7 @@ export class LabelSprites {
       depthWrite: false,
       sizeAttenuation: true,
     });
+    m.userData.textWidth = textWidth;
     this.cache.set(key, m);
     while (this.cache.size > this.capacity) {
       const [oldest, gone] = this.cache.entries().next().value!;

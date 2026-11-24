@@ -62,6 +62,18 @@ describe('fetchPack', () => {
     expect(p.calls.at(-1)).toEqual([bytes.length, null]);
   });
 
+  it('takes the inflated size from X-Pack-Size when the transfer was content-encoded', async () => {
+    const bytes = buildPack(OPTS);
+    const p = recorder();
+    const headers = {
+      'content-length': '10',
+      'content-encoding': 'gzip',
+      'x-pack-size': String(bytes.length),
+    };
+    await fetchPack('/x', p.fn, fakeFetch(bytes, { headers }));
+    expect(p.calls.at(-1)).toEqual([bytes.length, bytes.length]);
+  });
+
   it('inflates a body that is still gzip (a pack served as a file)', async () => {
     const gz = new Uint8Array(gzipSync(buildPack(OPTS)));
     const pack = await fetchPack('/x', () => {}, fakeFetch(gz));

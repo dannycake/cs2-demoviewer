@@ -25,7 +25,10 @@ use tokio::io::AsyncWriteExt;
 use url::Url;
 
 pub use decompress::{decompress_to_dem_within, MAX_DEM_BYTES, MAX_INFLATE_RATIO};
-pub use urlcheck::{check_redirect, check_url, is_private, is_replay_host, UrlError};
+pub use urlcheck::{
+    check_redirect, check_url, is_faceit_demo_host, is_private, is_replay_host, UrlError,
+    FACEIT_DEMO_HOSTS,
+};
 
 pub(crate) use decompress::{copy_capped, read_head};
 
@@ -225,15 +228,31 @@ fn request_error(e: reqwest::Error) -> UrlError {
     }
     tracing::info!(error = %with_causes(&e), "download request failed");
     let msg = if e.is_timeout() {
-        "the replay server took too long to answer"
+        "the demo server took too long to answer"
     } else if e.is_connect() {
-        "cannot connect to the replay server"
+        "cannot connect to the demo server"
     } else if e.is_body() || e.is_decode() {
         "the download was cut off"
     } else {
-        "the replay server could not be reached"
+        "the demo server could not be reached"
     };
     UrlError::Io(msg.to_owned())
+}
+
+/// Whether a job's error text is a download the host refused or no longer has: the
+/// `download failed: ` text `jobs` writes with HTTP 402, 403, 404 or 410. Timeouts, size
+/// caps, DNS failures and other statuses are not refusals.
+pub fn is_refusal(error: &str) -> bool {
+    let Some(rest) = error.strip_prefix("download failed: ") else {
+        return false;
+    };
+    rest.match_indices("HTTP ").any(|(i, tag)| {
+        let digits: String = rest[i + tag.len()..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        matches!(digits.as_str(), "402" | "403" | "404" | "410")
+    })
 }
 
 #[cfg(test)]
@@ -277,5 +296,28 @@ mod tests {
             accepted.is_err(),
             "a connection reached the private address"
         );
+    }
+
+    /// Download failures that name a refusal are told from the rest by their text.
+    #[test]
+    fn refusals_are_recognised() {
+        for code in [402, 403, 404, 410] {
+            let text = format!("download failed: {}", UrlError::Http(code));
+            assert!(is_refusal(&text), "{text}");
+        }
+        assert!(is_refusal("download failed: the server answered HTTP 403"));
+        for text in [
+            "download failed: the demo server took too long to answer",
+            "download failed: the file is larger than the size limit",
+            "download failed: cannot connect to the demo server",
+            "download failed: resolving x.example took too long",
+            "download failed: the server answered HTTP 500",
+            "download failed: the server answered HTTP 4030",
+            "the server answered HTTP 403",
+            "the demo took too long to parse (more than 60s)",
+            "",
+        ] {
+            assert!(!is_refusal(text), "{text}");
+        }
     }
 }

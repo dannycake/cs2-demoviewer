@@ -9,13 +9,21 @@
   max-width: 100%;
   color: var(--text-mute);
   text-decoration: none;
-  text-transform: lowercase;
   transition: color var(--ease);
 }
 
-.link:hover,
 .link:focus-visible {
   color: var(--text);
+}
+
+@media (hover: hover) {
+  .link:hover {
+    color: var(--text);
+  }
+
+  .link:hover .text {
+    text-decoration-color: var(--brand);
+  }
 }
 
 .mark {
@@ -31,7 +39,6 @@
   transition: text-decoration-color var(--ease);
 }
 
-.link:hover .text,
 .link:focus-visible .text {
   text-decoration-color: var(--brand);
 }

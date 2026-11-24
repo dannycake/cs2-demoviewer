@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import { statSync } from 'node:fs';
-import { SOURCE_URL } from '../src/links';
 import { trackErrors } from './errors';
 
 // Needs the server on 8095 (or DEMOVIEWER_E2E_URL) serving the built web app and the
@@ -10,13 +9,13 @@ const dem = process.env.DEMOVIEWER_E2E_DEM;
 const NO_DEM =
   'set DEMOVIEWER_E2E_DEM=<path to a .dem> with the server running';
 
-test('the upload page links to the source and loads no viewer chunk', async ({
+test('the home page links to Contact, not to the source, and loads no viewer chunk', async ({
   page,
   request,
 }) => {
   const up = await request.get('/').catch(() => null);
   test.skip(!up?.ok(), 'the server is not running');
-  // The scripts the page names: the entry, which holds the upload page.
+  // The scripts the page names: the entry, which holds the home page.
   const named = [
     ...(await up!.text()).matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g),
   ].map((m) => m[1]);
@@ -26,11 +25,9 @@ test('the upload page links to the source and loads no viewer chunk', async ({
   const errors = trackErrors(page);
 
   await page.goto('/');
-  const link = page.getByRole('link', { name: 'Source on GitHub' });
-  await expect(link).toBeVisible();
-  await expect(link).toHaveAttribute('href', SOURCE_URL);
-  await expect(link).toHaveAttribute('target', '_blank');
-  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  const link = page.getByRole('link', { name: 'Contact' });
+  await expect(link).toHaveAttribute('href', '/legal');
+  await expect(page.getByRole('link', { name: /Source/ })).toHaveCount(0);
   await page.waitForLoadState('networkidle');
 
   // The viewer (DemoView, and three.js with it) is a chunk of its own with its own stylesheet,
@@ -45,11 +42,10 @@ test('the upload page links to the source and loads no viewer chunk', async ({
   expect(box).not.toBeNull();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(375);
+  // The hero clips its skewed band on purpose (overflow: hidden): only the page itself counts.
   expect(
-    await page.evaluate(() =>
-      [document.documentElement, document.querySelector('main')!].some(
-        (el) => el.scrollWidth > el.clientWidth
-      )
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth
     )
   ).toBe(false);
   expect(errors).toEqual([]);

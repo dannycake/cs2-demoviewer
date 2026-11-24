@@ -27,7 +27,36 @@ export interface SummaryPlayer {
   /** Players of the other side killed; team kills and suicides do not count. */
   kills: number;
   deaths: number;
+  assists?: number;
+  /** Health damage to enemies; ADR is this over `rounds`. */
+  damage?: number;
+  headshots?: number;
+  /** Rounds on a side, which KAST and the rating are over (summary version 2). */
+  rounds?: number;
+  /** Rounds with a kill, an assist, survival or a traded death. */
+  kastRounds?: number;
+  /** Opening duels (the first enemy kill of a round) won and lost. */
+  openingWins?: number;
+  openingLosses?: number;
+  /** Rounds with 2, 3, 4 and 5+ enemy kills. */
+  multiKills?: [number, number, number, number];
+  /** The player's rank as the match started: kind 11 Premier, 12 Competitive, 7 Wingman. */
+  rank?: PlayerRank | null;
 }
+
+/** A player's matchmaking rank in one match (the pack's `rank`). */
+export interface PlayerRank {
+  kind: number;
+  /** The Premier rating, or the skill group 1–18; 0 = unrated. */
+  value: number;
+  wins: number;
+  if_win: number;
+  if_loss: number;
+  if_tie: number;
+}
+
+/** What kind of match, from the players' rank types. */
+export type GameMode = 'premier' | 'competitive' | 'wingman' | 'faceit' | 'other';
 
 /** The server's summary of a parsed match (server/crates/server/src/matches.rs). */
 export interface MatchSummary {
@@ -45,8 +74,16 @@ export interface MatchSummary {
   createdUnix: number;
   /** When the match was played, if known (a share code's match info). */
   playedUnix: number | null;
+  /** From the corpus: `createdUnix` is the day it was imported, not when it was played. */
+  imported?: boolean;
   /** Valve's match id as a decimal string, if known. */
   matchId: string | null;
+  /** Summary version 2: the mode (null for a pack from before ranks), a pro demo's event. */
+  mode?: GameMode | null;
+  event?: string | null;
+  /** The two teams of a pro match, when the corpus named them. */
+  teams?: [string, string];
+  gcGameType?: number | null;
 }
 
 /** A request the server answered with a non-2xx status. */

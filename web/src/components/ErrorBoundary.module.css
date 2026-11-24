@@ -22,7 +22,6 @@
 
 .title {
   color: var(--text);
-  text-transform: lowercase;
 }
 
 .text {
@@ -47,10 +46,9 @@
   border-radius: var(--r);
   font-size: var(--fs-dense);
   color: var(--text-dim);
-  background: rgba(9, 8, 6, 0.94);
+  background: var(--panel-strong);
   border: 1px solid var(--line-soft);
   border-left: 2px solid var(--warn);
-  text-transform: lowercase;
   pointer-events: auto;
 }
 

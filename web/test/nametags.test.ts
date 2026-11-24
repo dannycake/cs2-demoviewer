@@ -9,6 +9,7 @@ import { LabelSprites, type LabelCanvas } from '../src/scene/labels';
 import {
   NAME_LABEL_SIZE,
   NameTags,
+  FADED_NAME,
   TAG,
   tagPoint,
   type TagOptions,
@@ -314,5 +315,80 @@ describe('NameTags', () => {
     tags.dispose();
     expect(freed).toBe(1);
     expect(tags.root.parent).toBeNull();
+  });
+});
+
+describe('NameTags: apart and on screen', () => {
+  /** Two living players of the round: Milo (T), and eclipse (CT) at `at`. */
+  function two(at: { x: number; y: number }): PlayerState[] {
+    const [milo, eclipse] = states();
+    return [
+      milo,
+      { ...eclipse, ...at, health: 100, flags: FLAG.alive },
+      states()[2],
+      states()[3],
+    ];
+  }
+
+  /** A camera `back` metres behind `from` along the line to `to`, looking at `to`. */
+  function camera(from: THREE.Vector3, to: THREE.Vector3, back: number) {
+    const c = new THREE.PerspectiveCamera(60, 2, 0.05, 1000);
+    c.position
+      .copy(from)
+      .addScaledVector(from.clone().sub(to).normalize(), back);
+    c.lookAt(to);
+    c.updateMatrixWorld();
+    return c;
+  }
+
+  it('fades the farther of two names that would print over each other, and hides its bar', () => {
+    const { make } = canvases();
+    const tags = new NameTags(new LabelSprites(make, 16, NAME_LABEL_SIZE));
+    // eclipse stands 6 m behind Milo, on the camera's line through him.
+    const s = two({ x: 1200, y: -300 + 6 / UNIT });
+    const near = tagPoint(s[0], new THREE.Vector3());
+    const far = tagPoint(s[1], new THREE.Vector3());
+    const cam = camera(near, far, 4);
+    tags.update(
+      s,
+      header(),
+      ROUND,
+      options({ eye: cam.position, camera: cam, width: 800, height: 400 })
+    );
+    const [milo, eclipse] = shownTags(tags);
+    const name = (t: THREE.Object3D) =>
+      sprite(t, 'tag-name').material as THREE.SpriteMaterial;
+    expect(name(milo).opacity).toBe(1);
+    expect(sprite(milo, 'tag-bar').visible).toBe(true);
+    expect(name(eclipse).opacity).toBe(FADED_NAME);
+    expect(sprite(eclipse, 'tag-bar').visible).toBe(false);
+    expect(sprite(eclipse, 'tag-fill').visible).toBe(false);
+  });
+
+  it('moves a name in from the edge of the view, its bar left over the player', () => {
+    const { make } = canvases();
+    const tags = new NameTags(new LabelSprites(make, 16, NAME_LABEL_SIZE));
+    const s = states();
+    const p = tagPoint(s[0], new THREE.Vector3());
+    // Milo 5 m ahead and near the right edge: 0.97 of the half view's width to the right.
+    const cam = new THREE.PerspectiveCamera(60, 2, 0.05, 1000);
+    const half = 5 * Math.tan(Math.PI / 6) * 2;
+    cam.position.copy(p).add(new THREE.Vector3(-0.97 * half, 0, 5));
+    cam.lookAt(cam.position.clone().add(new THREE.Vector3(0, 0, -1)));
+    cam.updateMatrixWorld();
+    tags.update(
+      s,
+      header(),
+      ROUND,
+      options({ eye: cam.position, camera: cam, width: 800, height: 400 })
+    );
+    const [milo] = shownTags(tags);
+    // The name (as wide as its label here: the stub measures nothing) ends 4 px in from the
+    // right edge: moved left, its centre right of the sprite's middle.
+    const name = sprite(milo, 'tag-name');
+    const nameW = TAG.namePx * 8;
+    const x = ((0.97 + 1) / 2) * 800;
+    expect(name.center.x).toBeCloseTo(0.5 - (796 - (x + nameW / 2)) / nameW, 3);
+    expect(sprite(milo, 'tag-bar').center.x).toBe(0.5);
   });
 });

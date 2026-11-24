@@ -14,14 +14,17 @@ export type PovOverlay =
 const NONE: PovOverlay = { kind: 'none' };
 const scratch = newPlayerState();
 
+/** Nothing in the other cameras, nor over the full radar (`radar`), which is not first person. */
 export function povOverlay(s: {
   pack: Pack | null;
   round: number;
   tick: number;
   camera: string;
   follow: number | null;
+  radar?: boolean;
 }): PovOverlay {
-  if (s.camera !== 'pov' || s.follow === null || !s.pack) return NONE;
+  if (s.camera !== 'pov' || s.radar || s.follow === null || !s.pack)
+    return NONE;
   const { header } = s.pack;
   const info = header.rounds[s.round];
   const track = s.pack.rounds[s.round]?.players[s.follow];

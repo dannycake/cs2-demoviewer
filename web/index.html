@@ -4,8 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
+    <!-- The homepage's words; the server puts each page's own in their place (pages.rs). -->
+    <meta
+      name="description"
+      content="Watch any CS2 demo in 3D, right in your browser, no install. Pro tournament replays, your own matches and your friends&#39; stats."
+    />
     <link rel="icon" href="/favicon.ico" />
-    <title>cs.skunk.to</title>
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <!-- The faces every site page sets its text in, fetched with the scripts rather than after
+         the CSS is read; kept a year (a changed font gets a new name). -->
+    <link
+      rel="preload"
+      href="/fonts/archivo-latin-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/archivo-latin-600-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/archivo-latin-700-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/archivo-latin-800-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <title>CS2 demo viewer in your browser · skunk.club</title>
   </head>
   <body>
     <div id="root"></div>

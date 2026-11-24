@@ -1,26 +1,15 @@
 // @vitest-environment jsdom
-// The link to the project's source (components/SourceLink, `SOURCE_URL`): the upload page's
-// footer and the viewer's settings both show it, opening the repository in a new tab without
-// handing it this page. In the settings it leaves the keys to playback: Space on it plays and
+// The link to the project's source (`SOURCE_URL`): the viewer's settings (components/SourceLink)
+// show it (the site's foot no longer does), opening the repository in a new tab without handing
+// it this page. In the settings it leaves the keys to playback: Space on it plays and
 // pauses, and its click gives focus back to the page.
 
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import Settings from '../src/components/hud/Settings';
 import { SOURCE_URL } from '../src/links';
 import { handleKey } from '../src/state/keys';
-import UploadView from '../src/views/UploadView';
 import { threeRoundStore } from './helpers/playback-pack';
-
-vi.mock('../src/api/site', () => ({
-  getSite: async () => ({ sharecodes: false }),
-}));
 
 afterEach(cleanup);
 
@@ -44,14 +33,6 @@ function sourceLink(within: HTMLElement = document.body): HTMLAnchorElement {
 describe('the source link', () => {
   it('is the repository', () => {
     expect(SOURCE_URL).toBe('https://github.com/dannycake/cs2-demoviewer');
-  });
-
-  it('is in the upload page’s footer', async () => {
-    await act(async () => {
-      render(<UploadView />);
-    });
-    const footer = screen.getByRole('contentinfo');
-    sourceLink(footer);
   });
 
   it('is in the settings, and leaves Space and the arrows to playback', () => {

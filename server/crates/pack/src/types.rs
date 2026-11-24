@@ -32,6 +32,27 @@ pub struct PlayerInfo {
     /// packs written before it existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crosshair: Option<String>,
+    /// The player's rank as the match started (the scoreboard's), from the first sample that
+    /// has a rank type; absent in packs written before it existed, and for a player the demo
+    /// never ranks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank: Option<PlayerRank>,
+}
+
+/// A player's matchmaking rank in one match, as the demo's player controller carries it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PlayerRank {
+    /// `m_iCompetitiveRankType`: 11 = Premier, 12 = Competitive (per map), 7 = Wingman.
+    pub kind: u8,
+    /// `m_iCompetitiveRanking`: the Premier rating, or the skill group 1–18; 0 = unrated.
+    pub value: i32,
+    /// `m_iCompetitiveWins`.
+    pub wins: i32,
+    /// The rating or group after a win, a loss or a tie (`m_iCompetitiveRankingPredicted_*`).
+    pub if_win: i32,
+    pub if_loss: i32,
+    pub if_tie: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -438,4 +459,40 @@ pub(crate) fn validate(m: &Match) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn player() -> PlayerInfo {
+        PlayerInfo {
+            steamid: 76561198000000001,
+            name: "a".into(),
+            team_by_round: vec![2],
+            crosshair: None,
+            rank: None,
+        }
+    }
+
+    #[test]
+    fn a_rank_round_trips_and_an_old_header_has_none() {
+        let p = PlayerInfo {
+            rank: Some(PlayerRank {
+                kind: 11,
+                value: 8058,
+                wins: 14,
+                if_win: 8150,
+                if_loss: 7960,
+                if_tie: 8058,
+            }),
+            ..player()
+        };
+        assert_eq!(
+            serde_json::from_str::<PlayerInfo>(&serde_json::to_string(&p).unwrap()).unwrap(),
+            p
+        );
+        let old = r#"{"steamid":"76561198000000001","name":"a","team_by_round":[2]}"#;
+        assert_eq!(serde_json::from_str::<PlayerInfo>(old).unwrap().rank, None);
+    }
 }

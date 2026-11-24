@@ -11,12 +11,15 @@
 // - ADR divides by the rounds started so far, the current one included;
 // - a player survives a round with no death from its start through its `end_tick`, and is
 //   traded when killed by an enemy whom a teammate kills within `STATS.tradeS` after;
-// - KAST and the rating are over the decided rounds (`tick ≥ end_tick`) the player was on a
-//   side for, and the rating takes its kills, deaths, assists and damage from those rounds only.
+// - a round's opening duel is its first kill of an enemy: the killer won it, the victim lost it;
+// - KAST and the rating (`rating.ts`, the one profiles show) are over the decided rounds
+//   (`tick ≥ end_tick`) the player was on a side for, and the rating takes its kills, deaths,
+//   assists, damage, multi-kill rounds and opening duels from those rounds only.
 // Each round's own numbers are a `RoundRecord`; a whole round's is kept per pack, so the match
 // so far is the sum of the kept rounds and the current round's record up to the tick.
 
 import type { Pack, PackEvent } from '../pack/types';
+import { rating } from './rating';
 
 export interface PlayerStats {
   kills: number;
@@ -37,7 +40,7 @@ export interface PlayerStats {
   utilityDamage: number;
   /** Assists on flash-assisted kills, each also in `assists`. */
   flashAssists: number;
-  /** `rating` over the decided rounds (0 without). */
+  /** The rating (`rating.ts`) over the decided rounds (0 without). */
   rating: number;
 }
 
@@ -54,29 +57,6 @@ export const STATS = Object.freeze({
 });
 
 const UTILITY: ReadonlySet<string> = new Set(STATS.utilityWeapons);
-
-/**
- * The public approximation of HLTV Rating 2.0 from per-round rates, with `kast` in percent.
- * Never below 0.
- */
-export function rating(r: {
-  kast: number;
-  kpr: number;
-  dpr: number;
-  apr: number;
-  adr: number;
-}): number {
-  const impact = 2.13 * r.kpr + 0.42 * r.apr - 0.41;
-  return Math.max(
-    0,
-    0.0073 * r.kast +
-      0.3591 * r.kpr -
-      0.5329 * r.dpr +
-      0.2372 * impact +
-      0.0032 * r.adr +
-      0.1587
-  );
-}
 
 const SPAWN_HEALTH = 100;
 
@@ -110,6 +90,10 @@ export interface PlayerRound {
   traded: boolean;
   /** On a side, with a kill, an assist, survival or a trade. */
   kast: boolean;
+  /** Made the round's first kill of an enemy (so far). */
+  openingWin: boolean;
+  /** Was the victim of the round's first kill of an enemy (so far). */
+  openingLoss: boolean;
 }
 
 /** One round's numbers, per player in header order. */
@@ -181,6 +165,8 @@ function record(
     survived: false,
     traded: false,
     kast: false,
+    openingWin: false,
+    openingLoss: false,
   }));
   const info = header.rounds[round];
   if (!info) return { players };
@@ -191,6 +177,7 @@ function record(
   };
   const hp = new Array<number>(n).fill(SPAWN_HEALTH);
   const died = new Array<boolean>(n).fill(false);
+  let opened = false;
   // The enemy kills so far: who died, to whom, when; open to a trade for `tradeS` after.
   const enemyKills: { victim: number; killer: number; tick: number }[] = [];
   const tradeTicks = STATS.tradeS * header.tick_rate;
@@ -232,6 +219,11 @@ function record(
       ) {
         players[attacker].kills++;
         if (d.headshot === true) players[attacker].headshots++;
+        if (!opened) {
+          opened = true;
+          players[attacker].openingWin = true;
+          players[victim].openingLoss = true;
+        }
         // When the victim had killed a teammate of the attacker in the last `tradeS`, this kill
         // trades that teammate's death.
         for (const k of enemyKills)
@@ -320,6 +312,9 @@ export function statsThrough(
     assists: 0,
     damage: 0,
     kast: 0,
+    multiKills: [0, 0, 0, 0] as [number, number, number, number],
+    openingWins: 0,
+    openingLosses: 0,
   }));
   const last = Math.min(round, header.rounds.length - 1);
   for (let r = 0; r <= last; r++) {
@@ -343,6 +338,9 @@ export function statsThrough(
         d.assists += p.assists;
         d.damage += p.damage;
         if (p.kast) d.kast++;
+        if (p.kills >= 2) d.multiKills[Math.min(p.kills, 5) - 2]++;
+        if (p.openingWin) d.openingWins++;
+        if (p.openingLoss) d.openingLosses++;
       }
     }
   }
@@ -353,13 +351,18 @@ export function statsThrough(
     if (s.rounds) {
       const d = decided[i];
       s.kast = (100 * d.kast) / s.rounds;
-      s.rating = rating({
-        kast: s.kast,
-        kpr: d.kills / s.rounds,
-        dpr: d.deaths / s.rounds,
-        apr: d.assists / s.rounds,
-        adr: d.damage / s.rounds,
-      });
+      s.rating =
+        rating({
+          rounds: s.rounds,
+          kills: d.kills,
+          deaths: d.deaths,
+          assists: d.assists,
+          damage: d.damage,
+          kastRounds: d.kast,
+          multiKills: d.multiKills,
+          openingWins: d.openingWins,
+          openingLosses: d.openingLosses,
+        }) ?? 0;
     }
   }
   return out;

@@ -112,8 +112,8 @@ describe('roundClock', () => {
   });
 
   it('counts down the freeze time as a negative clock', () => {
-    expect(roundClock(r, 1441 - 64 * 12, 64)).toBe('-0:12');
-    expect(roundClock(r, 1441 - 10, 64)).toBe('-0:01');
+    expect(roundClock(r, 1441 - 64 * 12, 64)).toBe('\u22120:12');
+    expect(roundClock(r, 1441 - 10, 64)).toBe('\u22120:01');
   });
 });
 
@@ -125,9 +125,9 @@ describe('roundTitle', () => {
   ];
 
   it("shows the score going into the round, from the round's own result", () => {
-    expect(roundTitle(rounds, 0)).toBe('Round 1 · T 0 : 0 CT');
-    expect(roundTitle(rounds, 1)).toBe('Round 2 · T 0 : 1 CT');
-    expect(roundTitle(rounds, 2)).toBe('Round 3 · T 1 : 1 CT');
+    expect(roundTitle(rounds, 0)).toBe('Round 1 · CT 0 : 0 T');
+    expect(roundTitle(rounds, 1)).toBe('Round 2 · CT 1 : 0 T');
+    expect(roundTitle(rounds, 2)).toBe('Round 3 · CT 1 : 1 T');
   });
 
   it('keeps the sides of the round being watched across the halftime switch', () => {
@@ -137,14 +137,14 @@ describe('roundTitle', () => {
       round({ number: 12, winner: 3, score_t: 3, score_ct: 9 }),
       round({ number: 13, winner: 2, score_t: 10, score_ct: 3 }),
     ];
-    expect(roundTitle(half, 0)).toBe('Round 12 · T 3 : 8 CT');
-    expect(roundTitle(half, 1)).toBe('Round 13 · T 9 : 3 CT');
+    expect(roundTitle(half, 0)).toBe('Round 12 · CT 8 : 3 T');
+    expect(roundTitle(half, 1)).toBe('Round 13 · CT 3 : 9 T');
   });
 
   it('shows the recorded score for a round with no known winner', () => {
     expect(
       roundTitle([round({ number: 4, winner: 0, score_t: 2, score_ct: 1 })], 0)
-    ).toBe('Round 4 · T 2 : 1 CT');
+    ).toBe('Round 4 · CT 1 : 2 T');
   });
 
   it('is empty without the round', () => {

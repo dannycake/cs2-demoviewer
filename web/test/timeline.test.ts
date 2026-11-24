@@ -192,13 +192,15 @@ describe('Timeline projectiles', () => {
 
   it('flies from its start tick to its detonation, labelled', () => {
     expect(tl.projectilesAt(0, 1049)).toEqual([]);
-    expect(tl.projectilesAt(0, 1060).map((g) => g.label)).toEqual(['SMOKE']);
+    expect(tl.projectilesAt(0, 1060).map((g) => g.label)).toEqual(['Smoke']);
     expect(tl.projectilesAt(0, 1100)).toEqual([]);
-    expect(tl.projectilesAt(0, 1210).map((g) => g.label)).toEqual(['MOLLY']);
+    expect(tl.projectilesAt(0, 1210).map((g) => g.label)).toEqual(['Molotov']);
   });
 
   it('without a detonation tick it flies to the end of its track', () => {
-    expect(tl.projectilesAt(0, 1300 + 17).map((g) => g.label)).toEqual(['INC']);
+    expect(tl.projectilesAt(0, 1300 + 17).map((g) => g.label)).toEqual([
+      'Incendiary',
+    ]);
     expect(tl.projectilesAt(0, 1300 + 18)).toEqual([]);
   });
 });
@@ -580,7 +582,7 @@ describe('Timeline bomb and clock', () => {
     );
     const all = f.feed(0, 99999, 99);
     expect(all.map((i) => `${i.kind}:${i.team}:${i.text}`)).toEqual([
-      'throw:2:player2 threw FLASH',
+      'throw:2:player2 threw a flash',
       'kill:2:player1 killed player3',
       'kill:3:player4 died',
       'plant:2:player2 planted the bomb',

@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use url::Url;
 
+use crate::faceit::FaceitKey;
 use crate::ratelimit::{parse_cidrs, Cidr};
+use crate::steam::ApiKey;
 
 /// Everything the server needs to know at startup. [`from_env`] fills it from `DEMOVIEWER_*`
 /// variables; `Config::default()` is the same with no variables set (tests start from it and
@@ -18,7 +20,7 @@ pub struct Config {
     /// `demos.json`.
     pub data_dir: PathBuf,
     /// `DEMOVIEWER_ASSETS`, default `./assets`: served under `/maps/`, `/players/`, `/weapons/`,
-    /// `/viewmodels/`, `/effects/` and `/sounds/`.
+    /// `/viewmodels/`, `/effects/`, `/sounds/` and `/site/`.
     pub assets_dir: PathBuf,
     /// `DEMOVIEWER_WEB`, default `./static`: the web app, with `index.html` as the fallback.
     pub web_dir: PathBuf,
@@ -67,10 +69,11 @@ pub struct Config {
     /// share codes are refused with 507 when accepting one could take the disk below it, and a
     /// job fails before a download or a pack write that could, and when inflating reaches it.
     pub min_free_bytes: u64,
-    /// What the public site offers. Nothing is ever listed: a match is reached by its link only
+    /// What the public site offers. There is no site-wide list of matches: they are listed on
+    /// their players' profiles and on tournament pages, and indexed by search engines once done
     /// (spec §13.2).
     pub site: Site,
-    /// `DEMOVIEWER_PUBLIC_URL`: where visitors reach the site (`https://cs.skunk.to/`), for the
+    /// `DEMOVIEWER_PUBLIC_URL`: where visitors reach the site (`https://skunk.club/`), for the
     /// absolute links a match page's preview tags need. Always ends in `/`. `None`, the default:
     /// pages carry no absolute links.
     pub public_url: Option<Url>,
@@ -78,6 +81,57 @@ pub struct Config {
     /// share codes into replay URLs (see `gcbot`). Always ends in `/`. `None`, the default: share
     /// codes are refused.
     pub gcbot_url: Option<Url>,
+    /// `DEMOVIEWER_IMPORT_DIR`: a demo corpus the server reads and never writes (its
+    /// `index.jsonl`), imported in the background (see `import`). `None`, the default: none.
+    pub import_dir: Option<PathBuf>,
+    /// `DEMOVIEWER_STEAM_API_KEY`: the Steam Web API key (32 hex digits; anything else stops
+    /// the server), for profiles' Steam facts and custom URL names (see `steam`). `None`, the
+    /// default: no Steam calls at all.
+    pub steam_api_key: Option<ApiKey>,
+    /// Lookups that may ask Steam (a custom URL name, a profile not fetched yet) per client an
+    /// hour.
+    pub lookups_per_hour: u32,
+    /// `DEMOVIEWER_REDIRECT_HOSTS`: old hosts (comma-separated, any case) sent to the public URL
+    /// for good (see `hosts`). Empty, the default: none.
+    pub redirect_hosts: Vec<String>,
+    /// Steam's OpenID endpoint, which sign-in goes to and asks to confirm a sign-in
+    /// (`auth::STEAM_OPENID`); a test's fake provider otherwise. Not read from the environment.
+    #[doc(hidden)]
+    pub openid_endpoint: Url,
+    /// FACEIT's site API, asked beside Steam for a profile's FACEIT account
+    /// (`faceit::FACEIT_API`); a test's fake FACEIT otherwise, which every test with a fake
+    /// Steam must set. Not read from the environment.
+    #[doc(hidden)]
+    pub faceit_api: Url,
+    /// `DEMOVIEWER_FACEIT_API_KEY`: the FACEIT Data API key (8 to 128 printable characters
+    /// without whitespace; anything else stops the server), for FACEIT nicknames in the one
+    /// input, room links and the poller (see `faceit`), with or without Steam. A profile's
+    /// FACEIT facts are asked only inside a Steam fetch, so they come from the Data API only
+    /// with `DEMOVIEWER_STEAM_API_KEY` as well. `None`, the default: FACEIT's site API is asked beside Steam instead, for the level and Elo alone.
+    pub faceit_api_key: Option<FaceitKey>,
+    /// FACEIT's Data API (`faceit::FACEIT_DATA_API`); a test's fake FACEIT otherwise. Not read
+    /// from the environment.
+    #[doc(hidden)]
+    pub faceit_data_api: Url,
+    /// `DEMOVIEWER_TRACKING_KEY`: the key tracked players' authentication codes are sealed with
+    /// at rest (64 hex digits; anything else stops the server). `None`, the default: nobody can
+    /// start tracking.
+    pub tracking_key: Option<crate::seal::Key>,
+    /// `DEMOVIEWER_CF_BEACON_TOKEN`: the site token of Cloudflare Web Analytics (letters and
+    /// digits, at most 64; anything else stops the server), which every page loads the beacon
+    /// with. `None`, the default: no analytics script.
+    pub cf_beacon_token: Option<String>,
+    /// `DEMOVIEWER_GSC_TOKEN`: the content of Google Search Console's
+    /// `google-site-verification` tag, which every page carries. `None`, the default: no tag.
+    pub gsc_token: Option<String>,
+    /// `DEMOVIEWER_INDEXNOW_KEY`: the IndexNow key (8 to 128 letters, digits and `-`; anything
+    /// else stops the server), served at `/{key}.txt`. With `DEMOVIEWER_PUBLIC_URL` too, new
+    /// pages are submitted to IndexNow. `None`, the default: no submissions.
+    pub indexnow_key: Option<String>,
+    /// Where IndexNow submissions go (`indexnow::ENDPOINT`). `DEMOVIEWER_INDEXNOW_URL`, a test
+    /// hook.
+    #[doc(hidden)]
+    pub indexnow_url: Url,
 }
 
 /// The public site's switches.
@@ -117,19 +171,36 @@ impl Default for Config {
             site: Site::default(),
             public_url: None,
             gcbot_url: None,
+            import_dir: None,
+            steam_api_key: None,
+            lookups_per_hour: 60,
+            redirect_hosts: Vec::new(),
+            openid_endpoint: Url::parse(crate::auth::STEAM_OPENID)
+                .expect("Steam's OpenID endpoint"),
+            faceit_api: Url::parse(crate::faceit::FACEIT_API).expect("FACEIT's API"),
+            faceit_api_key: None,
+            faceit_data_api: Url::parse(crate::faceit::FACEIT_DATA_API).expect("FACEIT's Data API"),
+            tracking_key: None,
+            cf_beacon_token: None,
+            gsc_token: None,
+            indexnow_key: None,
+            indexnow_url: Url::parse(crate::indexnow::ENDPOINT).expect("IndexNow's endpoint"),
         }
     }
 }
 
 /// Reads the `DEMOVIEWER_*` variable each field's doc names: `PORT`, `DATA`, `ASSETS`, `WEB`,
-/// `TRUSTED_PROXIES`, `CACHE_BYTES`, `MIN_FREE_BYTES`, `PUT_IDLE_SECS`, `PREVIEWS`, `PUBLIC_URL`
-/// and `GCBOT_URL`; the other limits keep their defaults. An unset or empty variable means the
+/// `TRUSTED_PROXIES`, `CACHE_BYTES`, `MIN_FREE_BYTES`, `PUT_IDLE_SECS`, `PREVIEWS`, `PUBLIC_URL`,
+/// `GCBOT_URL`, `IMPORT_DIR`, `STEAM_API_KEY`, `FACEIT_API_KEY`, `REDIRECT_HOSTS`, `TRACKING_KEY`, `CF_BEACON_TOKEN` and `GSC_TOKEN`; the other
+/// limits keep their defaults. An unset or empty variable means the
 /// default.
 ///
 /// # Panics
 /// If `DEMOVIEWER_PORT` is set but not a port number: a typo should stop the server, not
 /// move it to another port. The same for a switch that is neither on nor off ([`switch`]) and
-/// a public or gcbot URL that is not an http(s) address.
+/// a public or gcbot URL that is not an http(s) address, and a Steam key that is not 32 hex
+/// digits, a FACEIT key that is not 8 to 128 printable characters without whitespace, and a
+/// beacon token that is not 1 to 64 letters and digits.
 pub fn from_env() -> Config {
     from_vars(|name| std::env::var(name).ok())
 }
@@ -186,6 +257,58 @@ fn from_vars(var: impl Fn(&str) -> Option<String>) -> Config {
         let url = base_url(&v).unwrap_or_else(|e| panic!("DEMOVIEWER_GCBOT_URL={v:?}: {e}"));
         cfg.gcbot_url = Some(url);
     }
+    cfg.import_dir = var("DEMOVIEWER_IMPORT_DIR").map(PathBuf::from);
+    if let Some(v) = var("DEMOVIEWER_TRACKING_KEY") {
+        // The value is a secret: never in the message.
+        let key = crate::seal::Key::from_hex(&v)
+            .unwrap_or_else(|_| panic!("DEMOVIEWER_TRACKING_KEY is not 64 hex digits"));
+        cfg.tracking_key = Some(key);
+    }
+    if let Some(v) = var("DEMOVIEWER_REDIRECT_HOSTS") {
+        cfg.redirect_hosts = v
+            .split(',')
+            .map(|h| h.trim().to_ascii_lowercase())
+            .filter(|h| !h.is_empty())
+            .collect();
+    }
+    if let Some(v) = var("DEMOVIEWER_STEAM_API_KEY") {
+        // The value is a secret: never in the message.
+        let key = ApiKey::new(v.trim())
+            .unwrap_or_else(|| panic!("DEMOVIEWER_STEAM_API_KEY is not 32 hex digits"));
+        cfg.steam_api_key = Some(key);
+    }
+    if let Some(v) = var("DEMOVIEWER_FACEIT_API_KEY") {
+        // The value is a secret: never in the message.
+        let key = FaceitKey::new(v.trim()).unwrap_or_else(|| {
+            panic!(
+                "DEMOVIEWER_FACEIT_API_KEY is not 8 to 128 printable characters without whitespace"
+            )
+        });
+        cfg.faceit_api_key = Some(key);
+    }
+    if let Some(v) = var("DEMOVIEWER_CF_BEACON_TOKEN") {
+        let token = v.trim();
+        if token.len() > 64 || !token.bytes().all(|b| b.is_ascii_alphanumeric()) {
+            panic!("DEMOVIEWER_CF_BEACON_TOKEN is not 1 to 64 letters and digits");
+        }
+        cfg.cf_beacon_token = Some(token.to_owned());
+    }
+    cfg.gsc_token = var("DEMOVIEWER_GSC_TOKEN").map(|v| v.trim().to_owned());
+    if let Some(v) = var("DEMOVIEWER_INDEXNOW_KEY") {
+        let key = v.trim();
+        if !key.is_empty() {
+            if !(8..=128).contains(&key.len())
+                || !key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+            {
+                panic!("DEMOVIEWER_INDEXNOW_KEY is not 8 to 128 letters, digits and hyphens");
+            }
+            cfg.indexnow_key = Some(key.to_owned());
+        }
+    }
+    if let Some(v) = var("DEMOVIEWER_INDEXNOW_URL") {
+        cfg.indexnow_url = Url::parse(v.trim())
+            .unwrap_or_else(|e| panic!("DEMOVIEWER_INDEXNOW_URL is not a URL: {e}"));
+    }
     cfg
 }
 
@@ -231,6 +354,7 @@ mod tests {
         // when it does not have the chunk size the start answered.
         assert_eq!(d.chunk_bytes, 32 * 1024 * 1024);
         assert_eq!(d.cache_bytes, None, "packs are kept forever");
+        assert_eq!(d.import_dir, None);
     }
 
     #[test]
@@ -240,13 +364,97 @@ mod tests {
             "DEMOVIEWER_DATA" => Some("/srv/dv".into()),
             "DEMOVIEWER_WEB" => Some("".into()),
             "DEMOVIEWER_CACHE_BYTES" => Some(" 1000 ".into()),
+            "DEMOVIEWER_IMPORT_DIR" => Some("/corpus".into()),
+            "DEMOVIEWER_REDIRECT_HOSTS" => Some(" CS.skunk.to, ,old.example ".into()),
             _ => None,
         });
+        assert_eq!(cfg.redirect_hosts, ["cs.skunk.to", "old.example"]);
+        assert_eq!(cfg.import_dir, Some(PathBuf::from("/corpus")));
         assert_eq!(cfg.port, 9000);
         assert_eq!(cfg.cache_bytes, Some(1000));
         assert_eq!(cfg.data_dir, PathBuf::from("/srv/dv"));
         assert_eq!(cfg.web_dir, PathBuf::from("./static"));
         assert_eq!(cfg.assets_dir, PathBuf::from("./assets"));
+    }
+
+    #[test]
+    fn a_steam_key_is_read_and_hidden() {
+        // Made at run time: a literal shaped like a key reads as a leaked one to secret scanners.
+        let hex = "0123456789ABCDEF".repeat(2);
+        let cfg =
+            from_vars(|name| (name == "DEMOVIEWER_STEAM_API_KEY").then(|| format!(" {hex} ")));
+        assert_eq!(cfg.steam_api_key, ApiKey::new(&hex));
+        assert!(!format!("{cfg:?}").contains(&hex));
+        assert_eq!(Config::default().steam_api_key, None);
+    }
+
+    #[test]
+    fn a_tracking_key_is_read_and_hidden_and_a_bad_one_is_fatal() {
+        let hex = "0123456789abcdef".repeat(4);
+        let cfg = from_vars(|name| (name == "DEMOVIEWER_TRACKING_KEY").then(|| hex.clone()));
+        assert_eq!(cfg.tracking_key, crate::seal::Key::from_hex(&hex).ok());
+        assert!(!format!("{cfg:?}").contains(&hex));
+        let bad = "0123456789abcdef".repeat(3);
+        let stopped = std::panic::catch_unwind(|| {
+            from_vars(|name| (name == "DEMOVIEWER_TRACKING_KEY").then(|| bad.clone()))
+        })
+        .unwrap_err();
+        let msg = stopped.downcast_ref::<&str>().copied().unwrap_or_default();
+        assert!(
+            msg.contains("DEMOVIEWER_TRACKING_KEY") && !msg.contains(&bad),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn a_faceit_key_is_read_and_hidden_and_the_data_api_is_faceits() {
+        // Made at run time: a literal shaped like a key reads as a leaked one to secret scanners.
+        let key = ["0f1e2d3c", "4b5a", "4697", "8a7b", "6c5d4e3f2a1b"].join("-");
+        let cfg =
+            from_vars(|name| (name == "DEMOVIEWER_FACEIT_API_KEY").then(|| format!(" {key} ")));
+        assert_eq!(cfg.faceit_api_key, FaceitKey::new(&key));
+        assert!(!format!("{cfg:?}").contains(&key));
+        assert_eq!(Config::default().faceit_api_key, None);
+        assert_eq!(
+            Config::default().faceit_data_api.as_str(),
+            "https://open.faceit.com/data/v4/"
+        );
+    }
+
+    #[test]
+    fn a_bad_faceit_key_is_fatal_and_not_shown() {
+        let bad = "not a key: it has spaces";
+        let stopped = std::panic::catch_unwind(|| {
+            from_vars(|name| (name == "DEMOVIEWER_FACEIT_API_KEY").then(|| bad.into()))
+        })
+        .unwrap_err();
+        let msg = stopped
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| stopped.downcast_ref::<String>().map(String::as_str))
+            .unwrap();
+        assert!(
+            msg.contains("DEMOVIEWER_FACEIT_API_KEY") && !msg.contains(bad),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn a_bad_steam_key_is_fatal_and_not_shown() {
+        let bad = "not-a-key-0123456789abcdef012345";
+        let stopped = std::panic::catch_unwind(|| {
+            from_vars(|name| (name == "DEMOVIEWER_STEAM_API_KEY").then(|| bad.into()))
+        })
+        .unwrap_err();
+        let msg = stopped
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| stopped.downcast_ref::<String>().map(String::as_str))
+            .unwrap();
+        assert!(
+            msg.contains("DEMOVIEWER_STEAM_API_KEY") && !msg.contains(bad),
+            "{msg}"
+        );
     }
 
     #[test]
@@ -335,6 +543,69 @@ mod tests {
         ] {
             let started = std::panic::catch_unwind(|| {
                 from_vars(|name| (name == "DEMOVIEWER_PUBLIC_URL").then(|| bad.into()))
+            });
+            assert!(started.is_err(), "{bad:?} was accepted");
+        }
+    }
+
+    #[test]
+    fn the_beacon_and_verification_tokens_are_read_and_empty_means_none() {
+        let d = Config::default();
+        assert_eq!((d.cf_beacon_token, d.gsc_token), (None, None));
+        let cfg = from_vars(|name| match name {
+            "DEMOVIEWER_CF_BEACON_TOKEN" => Some("".into()),
+            "DEMOVIEWER_GSC_TOKEN" => Some("  ".into()),
+            _ => None,
+        });
+        assert_eq!((cfg.cf_beacon_token, cfg.gsc_token), (None, None));
+        let cfg = from_vars(|name| match name {
+            "DEMOVIEWER_CF_BEACON_TOKEN" => Some("abc".into()),
+            "DEMOVIEWER_GSC_TOKEN" => Some("abc".into()),
+            _ => None,
+        });
+        assert_eq!(cfg.cf_beacon_token.as_deref(), Some("abc"));
+        assert_eq!(cfg.gsc_token.as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn the_indexnow_key_is_validated_and_empty_means_none() {
+        let with = |v: &str| {
+            let v = v.to_owned();
+            from_vars(move |name| (name == "DEMOVIEWER_INDEXNOW_KEY").then(|| v.clone()))
+        };
+        assert_eq!(Config::default().indexnow_key, None);
+        assert_eq!(
+            Config::default().indexnow_url.as_str(),
+            crate::indexnow::ENDPOINT
+        );
+        assert_eq!(with("").indexnow_key, None);
+        assert_eq!(with("  ").indexnow_key, None);
+        assert_eq!(
+            with(" abcd-1234 ").indexnow_key.as_deref(),
+            Some("abcd-1234")
+        );
+        let long = "a".repeat(128);
+        assert_eq!(with(&long).indexnow_key.as_deref(), Some(long.as_str()));
+        for bad in ["short", "abcd efgh1234", "abcd_efgh1234", "abcdéfgh1234"] {
+            assert!(std::panic::catch_unwind(|| with(bad)).is_err(), "{bad:?}");
+        }
+        assert!(std::panic::catch_unwind(|| with(&"a".repeat(129))).is_err());
+    }
+
+    #[test]
+    fn the_indexnow_url_can_be_overridden() {
+        let cfg = from_vars(|name| {
+            (name == "DEMOVIEWER_INDEXNOW_URL").then(|| "http://127.0.0.1:9/x".into())
+        });
+        assert_eq!(cfg.indexnow_url.as_str(), "http://127.0.0.1:9/x");
+    }
+
+    /// The beacon token lands inside a single-quoted attribute, so only letters and digits pass.
+    #[test]
+    fn a_beacon_token_that_is_not_alphanumeric_is_fatal() {
+        for bad in ["a'b", "a b", "a\"b", "<x>", &"a".repeat(65)] {
+            let started = std::panic::catch_unwind(|| {
+                from_vars(|name| (name == "DEMOVIEWER_CF_BEACON_TOKEN").then(|| bad.into()))
             });
             assert!(started.is_err(), "{bad:?} was accepted");
         }

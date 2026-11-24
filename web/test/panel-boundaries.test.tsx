@@ -142,7 +142,7 @@ describe('ErrorBoundary around a panel', () => {
       </div>
     );
     const note = screen.getByTestId('panel-error');
-    expect(note.textContent).toBe('the widget stopped working');
+    expect(note.textContent).toBe('The widget stopped working');
     expect(note.getAttribute('role')).toBe('status');
     expect(note.title).toBe('widget is broken');
     expect(screen.getByText('sibling is fine')).toBeTruthy();
@@ -159,7 +159,7 @@ describe('ErrorBoundary around a panel', () => {
     const { rerender } = render(at(1));
     broken.delete('widget');
     rerender(at(1));
-    expect(notes()).toEqual(['the widget stopped working']);
+    expect(notes()).toEqual(['The widget stopped working']);
     rerender(at(2));
     expect(notes()).toEqual([]);
     expect(screen.getByText('widget is fine')).toBeTruthy();
@@ -203,7 +203,7 @@ describe('DemoView with a panel that throws', () => {
   it('loses only the round bar when it throws, and tries it again the next round', async () => {
     broken.add('round bar');
     await open();
-    expect(notes()).toEqual(['the round bar stopped working']);
+    expect(notes()).toEqual(['The round bar stopped working']);
     // The 3D view is a chunk of its own: in once its import settles.
     expect(await screen.findByTestId('viewport')).toBeTruthy();
     expectViewerUp();
@@ -218,21 +218,21 @@ describe('DemoView with a panel that throws', () => {
     broken.add('3d');
     await open();
     await waitFor(() =>
-      expect(notes()).toEqual(['the 3D view stopped working · reload the page'])
+      expect(notes()).toEqual(['The 3D view stopped working · Reload the page'])
     );
     expect(screen.queryByTestId('viewport')).toBeNull();
     expectViewerUp();
     // A new round does not build the scene again: only a new pack does.
     broken.delete('3d');
     act(() => playbackStore.getState().seekRound(1));
-    expect(notes()).toEqual(['the 3D view stopped working · reload the page']);
+    expect(notes()).toEqual(['The 3D view stopped working · Reload the page']);
   });
 
   it('plays on without the 3D view: Play moves the clock, and the sound stays', async () => {
     broken.add('3d');
     await open();
     await waitFor(() =>
-      expect(notes()).toEqual(['the 3D view stopped working · reload the page'])
+      expect(notes()).toEqual(['The 3D view stopped working · Reload the page'])
     );
     const from = playbackStore.getState().tick;
     act(() => playbackStore.getState().play());
@@ -248,9 +248,9 @@ describe('DemoView with a panel that throws', () => {
     broken.add('radar');
     await open();
     // The minimap is the radar too.
-    expect(notes()).toEqual(['the minimap stopped working']);
+    expect(notes()).toEqual(['The minimap stopped working']);
     act(() => playbackStore.getState().setRadar(true));
-    expect(notes()).toEqual(['the radar stopped working']);
+    expect(notes()).toEqual(['The radar stopped working']);
     // The 3D view is a chunk of its own: in once its import settles.
     expect(await screen.findByTestId('viewport')).toBeTruthy();
     expectViewerUp();

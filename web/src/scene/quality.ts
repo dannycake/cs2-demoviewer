@@ -19,6 +19,13 @@ export const QUALITIES: readonly Quality[] = ['low', 'medium', 'high'];
 
 export const DEFAULT_QUALITY: Quality = 'medium';
 
+/** A preset's name in the interface. */
+export const QUALITY_LABEL: Readonly<Record<Quality, string>> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
+
 export interface Preset {
   /**
    * Lambert materials lit by the sun and sky, tone-mapped (Neutral, at the map's exposure); off,

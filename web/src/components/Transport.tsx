@@ -1,29 +1,19 @@
 // The bar at the bottom: play/pause, round navigation with the score, the scrubber, the
-// clock, speed, the quality preset and what the page has downloaded.
+// clock, speed and the quality preset.
 // Controls that change a setting give focus back to the page, so Space and the arrows keep
 // driving playback instead of the control. In the narrow layout its controls are 44 px touch
-// targets and the scrubber has a row of its own above them; the rest wrap as the width
-// allows. `ref` is the bar, whose height the view measures.
+// targets, speed and quality are in Settings (`Settings`' `playback`), and the scrubber has a
+// row of its own above the rest, held upright, or sits between them on its side. `ref` is the
+// bar, whose height the view measures.
 
-import {
-  useRef,
-  useSyncExternalStore,
-  type Ref,
-  type SyntheticEvent,
-} from 'react';
-import { formatBytes, traffic } from '../net/traffic';
-import { QUALITIES, type Quality } from '../scene/quality';
+import { useRef, type Ref, type SyntheticEvent } from 'react';
+import { QUALITIES, QUALITY_LABEL, type Quality } from '../scene/quality';
 import { countRender, useDerived, useFrameWriter } from '../state/derive';
 import { playbackStore, SPEEDS } from '../state/store';
+import Digits from './hud/Digits';
 import { roundClock, roundTitle } from './scrubber-model';
 import Scrubber from './Scrubber';
 import styles from './Transport.module.css';
-
-const QUALITY_LABEL: Record<Quality, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-};
 
 function blur(e: SyntheticEvent<HTMLElement>) {
   e.currentTarget.blur();
@@ -60,9 +50,15 @@ function Chevron({ dir }: { dir: -1 | 1 }) {
   );
 }
 
+/** The debug corner's page (`?debug=1`): the clock's tooltip names the tick. */
+const DEBUG =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('debug') === '1';
+
 /**
  * Time in the round, kept apart from the bar: it renders once a second while playing, and
- * the exact tick (`data-tick`, the tooltip) is written to it in the frame after it changes.
+ * the exact tick (`data-tick`, and with `?debug=1` the tooltip) is written to it in the frame
+ * after it changes.
  */
 function Clock() {
   countRender('Clock');
@@ -70,14 +66,14 @@ function Clock() {
     const info = s.pack?.header.rounds[s.round];
     return info && s.pack
       ? roundClock(info, s.tick, s.pack.header.tick_rate)
-      : '-:--';
+      : '';
   }, []);
   const el = useRef<HTMLSpanElement>(null);
   useFrameWriter((s) => {
     const whole = String(Math.round(s.tick));
     if (!el.current || el.current.dataset.tick === whole) return;
     el.current.dataset.tick = whole;
-    el.current.title = `tick ${whole}`;
+    if (DEBUG) el.current.title = `tick ${whole}`;
   }, []);
   return (
     <span ref={el} className={styles.clock} data-testid="clock">
@@ -127,7 +123,7 @@ export default function Transport({ ref }: { ref?: Ref<HTMLDivElement> }) {
           <Chevron dir={-1} />
         </button>
         <span className={styles.title} data-testid="round-title">
-          {title}
+          <Digits text={title} />
         </span>
         <button
           type="button"
@@ -144,7 +140,10 @@ export default function Transport({ ref }: { ref?: Ref<HTMLDivElement> }) {
       <Scrubber />
       <Clock />
 
-      <label className={styles.speed} title="Playback speed">
+      <label
+        className={`${styles.speed} ${styles.figures}`}
+        title="Playback speed"
+      >
         <span className={styles.srOnly}>Speed</span>
         <select
           value={speed}
@@ -181,25 +180,6 @@ export default function Transport({ ref }: { ref?: Ref<HTMLDivElement> }) {
           ))}
         </select>
       </label>
-
-      <TrafficMeter />
     </div>
-  );
-}
-
-/** What the page has downloaded since it opened; re-renders only when that grows. */
-function TrafficMeter() {
-  const bytes = useSyncExternalStore(traffic.subscribe, () => traffic.total);
-  return (
-    <span
-      className={styles.traffic}
-      data-testid="traffic"
-      data-bytes={bytes}
-      title="Downloaded since this page opened, compressed: the app, the map, the player and weapon models, the effects, the sounds and the replay"
-    >
-      <span aria-hidden="true">↓ </span>
-      <span className={styles.srOnly}>Downloaded </span>
-      {formatBytes(bytes)}
-    </span>
   );
 }

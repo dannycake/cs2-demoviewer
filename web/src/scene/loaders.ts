@@ -68,10 +68,17 @@ export function makeGltfLoader(): GLTFLoader {
 /**
  * The GLB at `url`, each texture's decoded image released after its upload and fetched again
  * from `url` when it is needed again (`trackImage`). Its textures are its own (`ownTextures`):
- * `disposeObject` frees them with it.
+ * `disposeObject` frees them with it. `onBytes` hears the bytes in so far, as they arrive
+ * (inflated, where the server sent the file gzipped).
  */
-export async function loadGltf(url: string): Promise<GLTF> {
-  const gltf = await makeGltfLoader().loadAsync(url);
+export async function loadGltf(
+  url: string,
+  onBytes?: (loaded: number) => void
+): Promise<GLTF> {
+  const gltf = await makeGltfLoader().loadAsync(
+    url,
+    onBytes && ((e: ProgressEvent) => onBytes(e.loaded))
+  );
   trackImages(gltf, url);
   ownTextures(gltf.scene);
   return gltf;
@@ -145,10 +152,14 @@ function trackImages(gltf: GLTF, url: string): void {
 
 /**
  * The map's world at `url` as the file has it, undressed: the scene dresses a new map's world
- * itself once its bake is in (`applyLook`), so it is dressed once.
+ * itself once its bake is in (`applyLook`), so it is dressed once. `onBytes` hears its bytes
+ * as they arrive.
  */
-export async function loadWorld(url: string): Promise<THREE.Group> {
-  return (await loadGltf(url)).scene;
+export async function loadWorld(
+  url: string,
+  onBytes?: (loaded: number) => void
+): Promise<THREE.Group> {
+  return (await loadGltf(url, onBytes)).scene;
 }
 
 /**

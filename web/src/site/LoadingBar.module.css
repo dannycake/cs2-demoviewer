@@ -1,0 +1,36 @@
+.bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  height: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bar span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 40%;
+  background: var(--red, var(--brand));
+  animation: loading-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes loading-slide {
+  to {
+    left: 100%;
+  }
+}
+
+/* Without the motion, a still bar says the same. */
+@media (prefers-reduced-motion: reduce) {
+  .bar span {
+    left: 0;
+    width: 100%;
+    opacity: 0.6;
+    animation: none;
+  }
+}

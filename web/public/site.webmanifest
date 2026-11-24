@@ -1,0 +1,13 @@
+{
+  "name": "skunk.club",
+  "short_name": "skunk.club",
+  "description": "Watch any CS2 demo in 3D, right in your browser, no install. Pro tournament replays, your own matches and your friends' stats.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#000000",
+  "theme_color": "#e4163a",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

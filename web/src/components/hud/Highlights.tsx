@@ -13,6 +13,7 @@ import { useDismiss } from '../../state/dismiss';
 import { highlightSegment, highlightSegments } from '../../state/reel';
 import { playbackStore } from '../../state/store';
 import { highlightRows, type HighlightRow } from './models';
+import Digits from './Digits';
 import styles from './Highlights.module.css';
 
 interface Group {
@@ -145,7 +146,9 @@ export default function Highlights() {
               aria-label={`Round ${g.number}`}
             >
               <div className={styles.groupHead}>
-                <span className={styles.round}>Round {g.number}</span>
+                <span className={styles.round}>
+                  <Digits text={`Round ${g.number}`} />
+                </span>
                 <button
                   type="button"
                   className={styles.playAll}
@@ -169,7 +172,9 @@ export default function Highlights() {
                     >
                       <span className={styles.clock}>{r.clock}</span>
                       <span className={styles.name}>{r.player.name}</span>
-                      <span className={styles.label}>{r.label}</span>
+                      <span className={styles.label}>
+                        <Digits text={r.label} />
+                      </span>
                     </button>
                   </li>
                 ))}

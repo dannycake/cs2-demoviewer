@@ -2,8 +2,8 @@
 // after their death and its hold, whoever the camera cuts to (the killer, else the nearest
 // living teammate; a player the user picked is held on to the end of the round). While the
 // player it shows is dead it holds their death view: the eye where they died, looking where
-// they looked, as CS2's death cam does. Free starts from the view drawn last and nothing but
-// its keys move it.
+// they looked, as CS2's death cam does. Free starts from the view drawn last (from a player's
+// eyes, stepped back and up out of their head) and nothing but its keys move it.
 
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -18,6 +18,7 @@ import { verticalFov } from '../src/sim/scope';
 import {
   Cameras,
   FLY_START_S,
+  FREE_FROM_POV,
   POV_FOV,
   type CameraContext,
 } from '../src/scene/cameras';
@@ -360,8 +361,17 @@ describe('Cameras: POV, a death', () => {
   });
 });
 
+/** Where Free starts from POV's `pov`: behind and above the eye, facing as it did. */
+function overShoulder(pov: THREE.Camera): THREE.Vector3 {
+  const back = new THREE.Vector3(0, 0, 1).applyQuaternion(pov.quaternion);
+  return pov.position
+    .clone()
+    .addScaledVector(back, FREE_FROM_POV.back)
+    .add(new THREE.Vector3(0, FREE_FROM_POV.up, 0));
+}
+
 describe('Cameras: Free', () => {
-  it('starts from the view drawn last; frames and follow changes do not move it', () => {
+  it('starts behind and above the eyes POV showed, looking where they looked; frames and follow changes do not move it', () => {
     const pack = trackPack({
       players: [(k) => ({ x: 0, y: 8 * k, yaw: 90 }), still(0, 300)],
     });
@@ -371,22 +381,24 @@ describe('Cameras: Free', () => {
     const pov = step(c, pack, tickOf(10)).clone();
     c.mode = 'free';
     const free = step(c, pack, tickOf(10));
-    expect(free.position.toArray()).toEqual(pov.position.toArray());
+    const start = overShoulder(pov);
+    expect(free.position.distanceTo(start)).toBeLessThan(1e-9);
+    expect(free.position.y - pov.position.y).toBeCloseTo(FREE_FROM_POV.up, 9);
     expect(free.quaternion.toArray()).toEqual(pov.quaternion.toArray());
     // Playing on and switching who is followed leave it where it is.
     c.follow = 1;
     for (let k = 11; k < 150; k += 7) step(c, pack, tickOf(k), 0.1);
-    expect(c.camera.position.toArray()).toEqual(pov.position.toArray());
+    expect(c.camera.position.distanceTo(start)).toBeLessThan(1e-9);
     // Its keys move it: one frame's worth as the move starts, then as long as they are held.
     c.fly.keys.add('KeyW');
     step(c, pack, tickOf(150), 0.5);
-    expect(c.camera.position.distanceTo(pov.position)).toBeCloseTo(
+    expect(c.camera.position.distanceTo(start)).toBeCloseTo(
       FLY_START_S * c.fly.speed,
       6
     );
     expect(c.settling).toBe(true);
     step(c, pack, tickOf(150), 0.5);
-    expect(c.camera.position.distanceTo(pov.position)).toBeCloseTo(
+    expect(c.camera.position.distanceTo(start)).toBeCloseTo(
       (FLY_START_S + 0.5) * c.fly.speed,
       6
     );
@@ -424,7 +436,7 @@ describe('Cameras: Free', () => {
       0.1,
       ctx(pack, tickOf(10))
     );
-    expect(entry.position.distanceTo(c.pov.position)).toBeLessThanOrEqual(
+    expect(entry.position.distanceTo(overShoulder(c.pov))).toBeLessThanOrEqual(
       c.fly.speed / 60 + 1e-9
     );
   });
@@ -457,13 +469,13 @@ describe('Cameras: Free after a reel', () => {
     expect(back.position.toArray()).toEqual(at.toArray());
     expect(back.quaternion.toArray()).toEqual(facing.toArray());
     expect(back.fov).toBe(fov);
-    // Once: entering Free again takes the view drawn last.
+    // Once: entering Free again takes the view drawn last (over the shoulder of POV's).
     c.mode = 'pov';
     const pov = step(c, pack, tickOf(62)).clone();
     c.mode = 'free';
-    expect(step(c, pack, tickOf(62)).position.toArray()).toEqual(
-      pov.position.toArray()
-    );
+    expect(
+      step(c, pack, tickOf(62)).position.distanceTo(overShoulder(pov))
+    ).toBeLessThan(1e-9);
   });
 });
 

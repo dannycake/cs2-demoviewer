@@ -1,7 +1,7 @@
 /* The playback HUD. Every block sizes in em from --hud-size (DemoView sets it from the
-   viewport width); team colour comes in as --team from data-team. Panels are the gamw
-   system's surface, nearly opaque, with hairline edges and one radius; the round bar's score
-   blocks are the one solid colour on screen. */
+   viewport width); team colour comes in as --team from data-team. Panels are see-through black
+   (--panel, and --panel-strong for the dense ones) with hairline edges and square corners; the
+   round bar's score blocks are the one solid colour on screen. */
 
 .roundBar,
 .killfeed,
@@ -44,6 +44,7 @@
   padding: 0.3em 0.9em 0.45em;
   background: var(--team);
   color: #000;
+  font-family: var(--mono);
 }
 
 .score[data-team='3'] {
@@ -59,6 +60,7 @@
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
 }
 
 .pips {
@@ -70,12 +72,12 @@
   width: 0.5em;
   height: 0.5em;
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.85);
+  background: var(--panel);
 }
 
 .pips i[data-alive='false'] {
   background: transparent;
-  box-shadow: inset 0 0 0 0.11em rgba(9, 8, 6, 0.55);
+  box-shadow: inset 0 0 0 0.11em var(--panel);
 }
 
 .clock {
@@ -85,7 +87,8 @@
   justify-content: center;
   min-width: 7.2em;
   padding: 0.25em 1em 0.35em;
-  background: rgba(9, 8, 6, 0.94);
+  background: var(--panel-strong);
+  backdrop-filter: blur(2px);
   border-block: 1px solid var(--color-border-light);
 }
 
@@ -97,6 +100,7 @@
   font-weight: 700;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
 }
 
 .clock[data-phase='freeze'] .time {
@@ -104,27 +108,30 @@
 }
 
 .clock[data-phase='planted'] .time {
-  color: #ff5f52;
+  color: var(--brand-ink);
 }
 
+/* "Round over" is words: Archivo, where the clock's figures are mono. */
 .clock[data-phase='over'] .time {
+  font-family: var(--sans);
   font-size: 1em;
+  font-weight: 600;
   color: var(--color-text-secondary);
 }
 
 .clockBomb {
-  font-size: 0.8em;
+  font-size: max(var(--fs-micro), 0.8em);
   animation: pulse 1s ease-in-out infinite;
+  font-family: var(--mono);
 }
 
 .clockMeta {
   display: flex;
   gap: 0.6em;
   margin-top: 0.15em;
-  font-size: 0.7em;
+  font-size: max(var(--fs-micro), 0.7em);
   color: var(--color-text-secondary);
   white-space: nowrap;
-  text-transform: lowercase;
 }
 
 .half {
@@ -157,11 +164,11 @@
   gap: 0.45em;
   padding: 0.28em 0.6em;
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.86);
+  background: var(--panel-strong);
   border: 1px solid transparent;
   color: inherit;
   font-family: inherit;
-  font-size: 0.85em;
+  font-size: max(var(--fs-micro), 0.85em);
   font-weight: inherit;
   line-height: inherit;
   text-align: left;
@@ -171,18 +178,14 @@
   animation: slide-in 0.18s ease-out;
 }
 
-.kill:hover {
-  border-color: var(--color-text-muted);
-}
-
-.kill:focus-visible {
-  outline: 1px solid var(--brand);
-  outline-offset: 1px;
+@media (hover: hover) {
+  .kill:hover {
+    border-color: var(--color-text-muted);
+  }
 }
 
 .kill[data-mine='true'] {
   border-color: var(--brand);
-  background: rgba(30, 16, 54, 0.78);
 }
 
 @keyframes slide-in {
@@ -218,7 +221,7 @@
 }
 
 .badge[data-badge='headshot'] {
-  color: #ffffff;
+  color: var(--text);
 }
 
 .weapon {
@@ -229,7 +232,7 @@
 
 .weaponText {
   color: var(--color-text-secondary);
-  font-size: 0.85em;
+  font-size: max(var(--fs-micro), 0.85em);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -257,8 +260,8 @@
   padding: 0.2em 0.6em;
   border-right: 0.18em solid var(--team, var(--color-border-light));
   border-radius: var(--r) 0 0 var(--r);
-  background: rgba(9, 8, 6, 0.74);
-  font-size: 0.78em;
+  background: var(--panel-strong);
+  font-size: max(var(--fs-micro), 0.78em);
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -289,29 +292,25 @@
   padding: 0 0.8em;
   border: 1px solid var(--color-border-light);
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.86);
+  background: var(--panel);
   color: var(--color-text-secondary);
-  font-size: calc(var(--hud-size, 14px) * 0.85);
-  text-transform: lowercase;
+  font-size: max(var(--fs-label), calc(var(--hud-size, 14px) * 0.85));
   cursor: pointer;
   transition:
     border-color var(--ease),
     color var(--ease);
 }
 
-.killcam:hover {
-  border-color: var(--brand);
-  color: var(--color-text-primary);
-}
-
-.killcam:focus-visible {
-  outline: 1px solid var(--brand);
-  outline-offset: 2px;
+@media (hover: hover) {
+  .killcam:hover {
+    border-color: var(--brand);
+    color: var(--color-text-primary);
+  }
 }
 
 .killcamKey {
   font-family: inherit;
-  font-size: 0.85em;
+  font-size: max(var(--fs-micro), 0.85em);
   color: var(--color-text-muted);
 }
 
@@ -324,14 +323,10 @@
   border: 1px solid var(--color-border-light);
   border-left: 0.25em solid var(--team);
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.86);
+  background: var(--panel);
+  backdrop-filter: blur(2px);
   text-align: left;
   cursor: pointer;
-}
-
-.card:focus-visible {
-  outline: 1px solid var(--brand);
-  outline-offset: 2px;
 }
 
 .card[data-alive='false'] {
@@ -356,7 +351,8 @@
 .money {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #8fd48f;
+  font-family: var(--mono);
+  color: var(--ok);
 }
 
 .vitals {
@@ -377,6 +373,7 @@
   font-size: 1.35em;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
 }
 
 .hpBar {
@@ -394,7 +391,7 @@
 }
 
 .hpBar i[data-low='true'] {
-  background: #ff5f52;
+  background: var(--brand-ink);
 }
 
 .armor {
@@ -402,6 +399,7 @@
   align-items: center;
   gap: 0.25em;
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
   color: var(--color-text-secondary);
 }
 
@@ -414,7 +412,11 @@
 
 .handName {
   flex: 1 1 auto;
-  font-size: 0.85em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: max(var(--fs-micro), 0.85em);
   color: var(--color-text-secondary);
 }
 
@@ -422,11 +424,15 @@
   font-size: 1.1em;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
 }
 
+/* The grenades carried, at the weapon's height on its row, before the magazine. */
 .nades {
   display: flex;
-  gap: 0.4em;
+  flex: none;
+  align-items: center;
+  gap: 0.3em;
   opacity: 0.85;
 }
 
@@ -439,7 +445,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35em;
-  font-size: 0.75em;
+  font-size: max(var(--fs-micro), 0.75em);
 }
 
 .kd {
@@ -455,8 +461,8 @@
 }
 
 .tag[data-tag='Bomb'] {
-  background: rgba(255, 95, 82, 0.2);
-  color: #ffb0a8;
+  background: rgba(var(--brand-rgb), 0.2);
+  color: var(--brand-ink);
 }
 
 /* ------------------------------------------------------------ round strip */
@@ -468,7 +474,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: calc(var(--hud-size, 14px) * 0.8);
+  font-size: max(var(--fs-micro), calc(var(--hud-size, 14px) * 0.8));
 }
 
 .strip li[data-half='true'] {
@@ -476,6 +482,7 @@
 }
 
 .cell {
+  position: relative;
   display: grid;
   place-items: center;
   width: 1.5em;
@@ -483,11 +490,15 @@
   padding: 0;
   border: 0;
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.74);
-  color: rgba(9, 8, 6, 0.9);
+  background: var(--panel);
+  color: var(--panel-strong);
   font: inherit;
   font-size: 1em;
   cursor: pointer;
+}
+
+.cell > span {
+  font-family: var(--mono);
 }
 
 .cell[data-winner='2'] {
@@ -498,18 +509,32 @@
   background: var(--ct);
 }
 
-.cell[aria-current='true'] {
-  outline: 2px solid #ffffff;
-  outline-offset: 1px;
+/* A finger's target: 44 px high, reaching up over the view (below is the transport). */
+@media (pointer: coarse) {
+  .cell::before {
+    content: '';
+    position: absolute;
+    inset: calc(-44px + 1.5em + 4px) 0 -4px;
+  }
 }
 
-.cell:focus-visible {
-  outline: 1px solid var(--brand);
+/* A cell is a button: pointed at, a quiet edge; the round being played, the crimson one. */
+@media (hover: hover) {
+  .cell:hover {
+    outline: 1px solid var(--text-dim);
+    outline-offset: 1px;
+  }
+}
+
+.cell[aria-current='true'] {
+  outline: 2px solid var(--brand);
   outline-offset: 1px;
 }
 
 /* ------------------------------------------------------------ scoreboard */
 
+/* Its height is the room DemoView gives it (between the top HUD and the transport): it scrolls
+   rather than run off the screen. */
 .scoreboard {
   display: grid;
   gap: 1em;
@@ -517,13 +542,20 @@
   padding: 1em 1.2em;
   border: 1px solid var(--color-border-light);
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.94);
+  background: var(--panel-strong);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
+/* Names and headers are words, in the panel's Archivo; the cells' figures are mono. */
 .table {
   width: 100%;
   border-collapse: collapse;
+}
+
+.table td {
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
 }
 
 .table caption {
@@ -538,14 +570,13 @@
   padding-bottom: 0.35em;
   border-bottom: 2px solid var(--team);
   font-weight: 400;
-  letter-spacing: var(--track-label);
-  text-transform: lowercase;
   color: var(--text-mute);
 }
 
 .teamScore {
   font-size: 1.5em;
   color: var(--team);
+  font-family: var(--mono);
 }
 
 .table th,
@@ -555,10 +586,8 @@
 }
 
 .table thead th {
-  font-size: 0.75em;
+  font-size: max(var(--fs-micro), 0.75em);
   font-weight: 400;
-  letter-spacing: var(--track-label);
-  text-transform: lowercase;
   color: var(--text-mute);
 }
 
@@ -580,11 +609,11 @@
 }
 
 .table td[data-sign='1'] {
-  color: #8fd48f;
+  color: var(--ok);
 }
 
 .table td[data-sign='-1'] {
-  color: #ff8f86;
+  color: var(--danger);
 }
 
 .profile {
@@ -592,13 +621,20 @@
   text-decoration: none;
 }
 
-.profile:hover,
 .profile:focus-visible {
   text-decoration: underline;
 }
 
+@media (hover: hover) {
+  .profile:hover {
+    text-decoration: underline;
+  }
+}
+
 /* ------------------------------------------------------------ brand */
 
+/* The map and where it was played, on a panel the column's width (DemoView's --left-col), so it
+   reads over a bright map; the map's name whole on one line, the place cut short. */
 .brand {
   display: flex;
   flex-direction: column;
@@ -606,71 +642,71 @@
   pointer-events: none;
 }
 
-.wordmark {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45em;
-  width: max-content;
-  font-weight: 700;
-  font-size: 0.95em;
-  color: var(--color-text-primary);
-  text-decoration: none;
-  pointer-events: auto;
-}
-
-.wordmark img {
-  width: 1.6em;
-  height: auto;
-}
-
 .match {
   display: flex;
   gap: 0.5em;
   align-items: baseline;
-  font-size: 0.75em;
+  box-sizing: border-box;
+  width: var(--left-col, 14em);
+  max-width: 100%;
+  padding: 0.3em 0.55em;
+  border: 1px solid var(--line-soft);
+  background: var(--panel);
+  font-size: max(var(--fs-micro), 0.8em);
 }
 
 .mapName {
+  flex: none;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .place {
-  color: var(--color-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
 }
 
 /* ------------------------------------------------------------ settings */
 
+/* Not positioned: the panel hangs from the camera row's right edge (DemoView), as the
+   highlights do, clear of the round bar. */
 .settings {
-  position: relative;
   font-family: var(--font-family-sans);
   font-size: var(--hud-size, 14px);
   pointer-events: auto;
 }
 
+/* The camera bar's first cell: its height (DemoView's --cam-h) and panel, the hairline between
+   them shared. */
 .gear {
   display: grid;
   place-items: center;
-  width: 2.1em;
-  height: 2.1em;
+  width: var(--cam-h, var(--ctl-h));
+  height: var(--cam-h, var(--ctl-h));
+  margin-right: -1px;
   padding: 0;
-  border: 1px solid var(--color-border-light);
+  border: 1px solid var(--line);
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.86);
-  color: var(--color-text-secondary);
-  font-size: 0.9em;
+  background: var(--panel-strong);
+  color: var(--text-mute);
+  font-size: max(var(--fs-micro), calc(var(--cam-h, var(--ctl-h)) * 0.45));
   cursor: pointer;
 }
 
-.gear:hover,
 .gear[aria-expanded='true'] {
   color: var(--color-text-primary);
 }
 
-.gear:focus-visible {
-  outline: 1px solid var(--brand);
-  outline-offset: 2px;
+@media (hover: hover) {
+  .gear:hover {
+    color: var(--color-text-primary);
+  }
 }
 
+/* Within the screen, above the transport: on a short screen it scrolls. */
 .panel {
   position: absolute;
   top: calc(100% + 0.5em);
@@ -679,12 +715,20 @@
   display: grid;
   gap: 0.9em;
   width: 27em;
+  max-width: calc(100vw - 2 * var(--space-2));
+  max-height: calc(
+    100dvh - var(--bar-h, 0px) - var(--cam-h, var(--ctl-h)) -
+      var(--transport-height, 52px) - var(--strip-height, 24px) - 4 *
+      var(--space-3)
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.9em 1em;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--surface-1);
+  background: var(--panel-strong);
   box-shadow: var(--shadow-overlay);
-  font-size: 0.8em;
+  font-size: max(var(--fs-label), 0.8em);
   color: var(--text);
 }
 
@@ -694,14 +738,11 @@
   margin: 0;
   padding: 0;
   border: 0;
-  text-transform: lowercase;
 }
 
 .fields legend {
   margin-bottom: 0.4em;
   font-weight: 400;
-  letter-spacing: var(--track-label);
-  text-transform: lowercase;
   color: var(--text-mute);
 }
 
@@ -717,7 +758,19 @@
   display: grid;
   gap: 0.35em;
   color: var(--text-dim);
-  text-transform: lowercase;
+}
+
+/* A setting with a select: its name, and the select at the right. */
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  color: var(--text-dim);
+}
+
+.figures {
+  font-family: var(--mono);
 }
 
 .scale input:disabled {
@@ -735,7 +788,7 @@
 
 .keys div {
   display: grid;
-  grid-template-columns: 6em 1fr;
+  grid-template-columns: 6.5em 1fr;
   gap: 0.5em;
   align-items: baseline;
 }
@@ -743,13 +796,12 @@
 .keys dd {
   margin: 0;
   color: var(--text-dim);
-  text-transform: lowercase;
 }
 
 .keys kbd {
   font-family: inherit;
   font-weight: 500;
-  font-size: 0.9em;
+  font-size: max(var(--fs-micro), 0.9em);
   white-space: nowrap;
 }
 
@@ -813,7 +865,8 @@
 }
 
 .cash {
-  color: #8fd48f;
+  color: var(--ok);
+  font-family: var(--mono);
 }
 
 .table th.kitHead,
@@ -880,13 +933,9 @@
   width: 100%;
 }
 
-/* The compact scoreboard: the name, then kills, deaths, ADR and rating; it scrolls rather than
-   leave the screen. */
+/* The compact scoreboard: the name, then kills, deaths, ADR and rating. */
 .scoreboard[data-columns='compact'] {
   width: min(30em, calc(100vw - 2em));
-  max-height: calc(100vh - 2em);
-  max-height: calc(100dvh - 2em);
-  overflow-y: auto;
 }
 
 .scoreboard[data-columns='compact'] .table thead th:first-child {
@@ -901,27 +950,14 @@
   width: 4.2em;
 }
 
-/* The settings hang from the camera row's right edge, as its other panels do, within the
-   screen, and scroll on a short one; the gear is as tall as the camera bar beside it. */
-[data-narrow='true'] .settings {
-  position: static;
-}
-
-[data-narrow='true'] .gear {
-  width: var(--ctl-h);
-  height: var(--ctl-h);
-  font-size: var(--fs-body);
-}
-
 [data-narrow='true'] .killcamKey {
   display: none;
 }
 
-[data-narrow='true'] .panel {
-  max-width: calc(100vw - 2 * var(--space-2));
-  max-height: calc(100vh - var(--ctl-h) - 4 * var(--space-2));
-  max-height: calc(100dvh - var(--ctl-h) - 4 * var(--space-2));
-  overflow-y: auto;
+/* The match line beside the card at the bottom: within its half of the screen. */
+[data-narrow='true'] .match {
+  width: auto;
+  max-width: calc(50vw - 2 * var(--space-2));
 }
 
 /* A finger has no keys to learn, and needs taller rows. */
@@ -930,7 +966,17 @@
     display: none;
   }
 
-  .toggle {
+  .toggle,
+  .choice {
     min-height: 2.6em;
   }
+}
+
+/* ------------------------------------------------------------ figures (Digits) */
+
+/* A line's figures, in JetBrains Mono among its words. */
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }

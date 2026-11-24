@@ -1,6 +1,6 @@
 // Grenades and their effects in the scene, posed every frame from the round timeline alone
 // (`sim/timeline.ts`): a grenade in flight is its model, a glow, a ribbon of the last 1.2 s of
-// its path and a label (SMOKE, FLASH, HE, MOLLY, INC, DECOY over the thrower's name) at a fixed
+// its path and a label (Smoke, Flash, HE, Molotov, Incendiary, Decoy over the thrower's name) at a fixed
 // size on screen; a smoke is a cluster of puffs of CS2's smoke, grey-white and lit where it
 // stands on a baked map, in the fog's colour on any other; a fire CS2's flames over a glowing
 // disc with smoke rising off it (`fire.ts`); a flash the generated glow with CS2's flare over it; an HE grenade CS2's fireball,

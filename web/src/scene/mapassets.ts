@@ -152,6 +152,12 @@ export class MapAssets {
   private entitiesPack: Pack | null = null;
   private disposed = false;
 
+  /**
+   * Hears a world file's bytes as they arrive, and the file's size from the manifest (null
+   * when it does not say): the viewer's progress while the world loads.
+   */
+  onWorldBytes: ((loaded: number, total: number | null) => void) | null = null;
+
   constructor(host: MapHost) {
     this.host = host;
   }
@@ -313,6 +319,7 @@ export class MapAssets {
     load.manifest = manifest;
     load.file = worldFile(manifest, this.host.phone());
     const worldUrl = file(load.file);
+    const worldBytes = files?.[load.file]?.bytes ?? null;
     // The same file (a preset change on a map without the phone tier): nothing to swap.
     if (this._world && worldUrl === this.worldUrl) return;
     // The look multiplies the detail texture into the world: wait for it (it is small and
@@ -336,7 +343,9 @@ export class MapAssets {
     let world: THREE.Group;
     try {
       // Undressed: the look waits for the bake (and the preset may change meanwhile).
-      world = await loadWorld(worldUrl);
+      world = await loadWorld(worldUrl, (loaded) => {
+        if (!superseded()) this.onWorldBytes?.(loaded, worldBytes);
+      });
     } catch (e) {
       void hullLoad?.then((h) => h?.dispose());
       void entitiesLoad?.then((g) => g && disposeObject(g));

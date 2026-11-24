@@ -12,6 +12,7 @@ import { statsThrough } from '../sim/stats';
 import { countRender, useDerived } from '../state/derive';
 import { useDismiss } from '../state/dismiss';
 import { playbackStore, shownAt, type Playback } from '../state/store';
+import Digits from './hud/Digits';
 import WeaponIcon from './hud/WeaponIcon';
 import { playerRows, sortRows, type PlayerRow } from './player-rows';
 import styles from './PlayerList.module.css';
@@ -208,7 +209,7 @@ export default function PlayerList({
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        Players{count ? ` (${count})` : ''}
+        <Digits text={`Players${count ? ` (${count})` : ''}`} />
       </button>
       <div className={styles.body}>
         {sheet && (

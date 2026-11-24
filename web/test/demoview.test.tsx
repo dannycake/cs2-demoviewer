@@ -19,6 +19,7 @@ import type { Pack } from '../src/pack/types';
 import { playbackStore } from '../src/state/store';
 import DemoView from '../src/views/DemoView';
 import { mapNotice, noRoundsNotice } from '../src/views/notices';
+import { dropPre, preShown, putPre } from './helpers/pre';
 import { trackPack, withSecondRound } from './helpers/track-pack';
 
 /** What the stubbed server calls answer; each test sets its own. */
@@ -127,6 +128,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   playbackStore.setState({ quality: 'medium', qualityFrom: 'default' });
   window.history.replaceState(null, '', '/');
+  dropPre();
 });
 
 describe('DemoView', () => {
@@ -139,10 +141,13 @@ describe('DemoView', () => {
     server.progress = [2 * 1048576, 4 * 1048576];
     render(<DemoView demoId="demo1" />);
     await waitFor(() => expect(panel('status')).toContain('Parsing the demo'));
-    expect(panel('status')).toContain('de_mirage · 2 rounds');
+    expect(panel('status')).toContain('Mirage · 2 rounds');
+    // Nothing of the HUD while it loads: no transport, camera bar or player list to press.
+    expect(screen.queryByTestId('transport')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Camera' })).toBeNull();
     await act(async () => release());
     await waitFor(() =>
-      expect(panel('status')).toContain('Loading the match · 2.0 MB')
+      expect(panel('status')).toContain('Loading the match · 2.0 of 4.0 MB')
     );
     await act(async () => packIn());
     await waitFor(() => expect(playbackStore.getState().pack).not.toBeNull());
@@ -150,22 +155,27 @@ describe('DemoView', () => {
     expect(playbackStore.getState().status).toBe('ready');
   });
 
-  it('says why a demo the server could not parse cannot be opened', async () => {
+  it('says why a demo the server could not parse cannot be opened, with no HUD under it', async () => {
     server.statuses = [status('error', { error: 'not a CS2 demo' })];
     render(<DemoView demoId="demo1" />);
     await waitFor(() =>
       expect(panel('alert')).toBe(
-        'This demo could not be openednot a CS2 demoUpload a demo'
+        "This match couldn't be openedNot a CS2 demo.Upload a demo"
       )
     );
     expect(playbackStore.getState().pack).toBeNull();
+    expect(
+      screen.getByRole('link', { name: 'Upload a demo' }).getAttribute('href')
+    ).toBe('/');
+    expect(screen.queryByTestId('transport')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Camera' })).toBeNull();
   });
 
   it('says why a pack that did not load cannot be opened', async () => {
     server.packs.set('demo1', new Error('the pack is truncated'));
     render(<DemoView demoId="demo1" />);
     await waitFor(() =>
-      expect(panel('alert')).toContain('the pack is truncated')
+      expect(panel('alert')).toContain('The pack is truncated.')
     );
   });
 
@@ -194,6 +204,17 @@ describe('DemoView', () => {
     expect(screen.getByTestId('transport')).toBeTruthy();
   });
 
+  it('shows no download size in the transport bar (there is no HD to choose)', async () => {
+    server.manifest = null;
+    render(<DemoView demoId="demo1" />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Watch without the map' })
+    );
+    const transport = screen.getByTestId('transport');
+    expect(screen.queryByTestId('traffic')).toBeNull();
+    expect(transport.textContent).not.toMatch(/\d\s*(B|kB|KB|MB|GB)\b/);
+  });
+
   it('says a demo without rounds has none, with no way to watch it, over the missing map', async () => {
     const p = pack();
     server.packs.set('demo1', {
@@ -210,6 +231,30 @@ describe('DemoView', () => {
     ).toBeNull();
   });
 
+  it("keeps the server's scoreboard in the page behind the viewer once the pack is in, and in sight while it loads", async () => {
+    putPre();
+    let packIn!: () => void;
+    server.holdPack.set('demo1', new Promise((r) => (packIn = r)));
+    render(<DemoView demoId="demo1" />);
+    await waitFor(() => expect(panel('status')).toContain('Loading the match'));
+    expect(preShown()).toBe(true);
+    await act(async () => packIn());
+    await waitFor(() => expect(playbackStore.getState().pack).not.toBeNull());
+    await waitFor(() =>
+      expect('tucked' in document.getElementById('pre')!.dataset).toBe(true)
+    );
+  });
+
+  it("keeps the server's scoreboard when the pack did not load", async () => {
+    putPre();
+    server.packs.set('demo1', new Error('the pack is truncated'));
+    render(<DemoView demoId="demo1" />);
+    await waitFor(() =>
+      expect(panel('alert')).toContain('The pack is truncated.')
+    );
+    expect(preShown()).toBe(true);
+  });
+
   it('leaves the pack of a demo it left alone', async () => {
     let first!: () => void;
     server.holdPack.set('demo1', new Promise((r) => (first = r)));
@@ -220,5 +265,37 @@ describe('DemoView', () => {
     await waitFor(() => expect(playbackStore.getState().pack).toBe(second));
     await act(async () => first());
     expect(playbackStore.getState().pack).toBe(second);
+  });
+});
+
+describe('the site bar over the viewer', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 404 }))
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('says which site this is, with its search and a way home', async () => {
+    render(<DemoView demoId="demo1" />);
+    const home = await screen.findByRole('link', { name: /skunk\.club/ });
+    expect(home.getAttribute('href')).toBe('/');
+    expect(home.closest('.site-chrome')).toBeTruthy();
+    expect(
+      screen.getByRole('textbox', { name: 'A player or a match' })
+    ).toBeTruthy();
+    // Said once: the HUD's corner keeps the map and the place, not a second wordmark.
+    expect(screen.getAllByRole('link', { name: /skunk\.club/ })).toHaveLength(
+      1
+    );
+  });
+
+  it('is not drawn with ?hud=0, the 3D view alone', async () => {
+    window.history.replaceState(null, '', '/d/demo1?hud=0');
+    render(<DemoView demoId="demo1" />);
+    await screen.findByTestId('viewport');
+    expect(screen.queryByRole('link', { name: /skunk\.club/ })).toBeNull();
+    expect(document.querySelector('.site-chrome')).toBeNull();
   });
 });

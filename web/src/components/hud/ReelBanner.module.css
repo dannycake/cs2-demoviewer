@@ -10,9 +10,9 @@
   border: 1px solid var(--line-soft);
   border-left: 2px solid var(--brand);
   border-radius: var(--r);
-  background: rgba(9, 8, 6, 0.9);
+  background: var(--panel-strong);
   font-family: var(--font-family-sans);
-  font-size: calc(var(--hud-size, 14px) * 0.8);
+  font-size: max(var(--fs-label), calc(var(--hud-size, 14px) * 0.8));
   color: var(--text);
   pointer-events: auto;
   user-select: none;
@@ -37,6 +37,7 @@
   flex: none;
   color: var(--text-mute);
   font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
 }
 
 .button {
@@ -50,28 +51,23 @@
   background: transparent;
   color: var(--text-dim);
   font: inherit;
-  text-transform: lowercase;
   cursor: pointer;
   transition:
     background var(--ease),
     color var(--ease);
 }
 
-.button:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.button:focus-visible {
-  outline: 1px solid var(--brand);
-  outline-offset: -1px;
+@media (hover: hover) {
+  .button:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
 }
 
 .key {
   font-family: inherit;
-  font-size: 0.85em;
+  font-size: max(var(--fs-micro), 0.85em);
   color: var(--text-mute);
-  text-transform: lowercase;
 }
 
 /* Narrow (state/device): no keys, and the buttons a finger high. */

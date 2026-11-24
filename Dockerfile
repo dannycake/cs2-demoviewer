@@ -11,6 +11,8 @@ COPY web/package.json web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm ci --no-audit --no-fund
 
+# The guides' HTML fragments live with the server; web/src/site/guides.ts imports them raw.
+COPY server/crates/server/guides/ ../server/crates/server/guides/
 COPY web/ ./
 RUN npm run build
 

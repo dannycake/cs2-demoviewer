@@ -1,13 +1,23 @@
 // The gear by the camera modes: grenade labels and trails, damage numbers, the minimap, the
 // outlines through walls, the names over heads, the round summary, the kill cam after each
-// death, the sound and its volume, the HUD's size, the keys, and the link to the source. Closes
-// on Escape or a click outside it; the Escape that closes it is spent there, so the key map
-// does not also close the highlights or leave a reel with it.
+// death, the sound and its volume, the HUD's size, the keys, and the link to the source; with
+// `playback` (the narrow layout, whose transport has no room for them), the speed and the
+// quality preset first. Closes on Escape or a click outside it; the Escape that closes it is
+// spent there, so the key map does not also close the highlights or leave a reel with it.
 
-import { useId, useRef, useState, type CSSProperties } from 'react';
+import {
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type SyntheticEvent,
+} from 'react';
+import { QUALITIES, QUALITY_LABEL, type Quality } from '../../scene/quality';
 import { useDismiss } from '../../state/dismiss';
 import { HUD_SCALE, settingsStore, useSettings } from '../../state/settings';
+import { playbackStore, SPEEDS, usePlayback } from '../../state/store';
 import SourceLink from '../SourceLink';
+import Digits from './Digits';
 import styles from './hud.module.css';
 
 const KEYS: [string, string][] = [
@@ -50,7 +60,57 @@ function Toggle({
   );
 }
 
-export default function Settings() {
+/** A control that changed a setting gives focus back to the page (Space plays, as the transport's). */
+function blur(e: SyntheticEvent<HTMLElement>) {
+  e.currentTarget.blur();
+}
+
+/** The speed and the quality preset, as the wide transport has them. */
+function Playback() {
+  const speed = usePlayback((s) => s.speed);
+  const quality = usePlayback((s) => s.quality);
+  const act = playbackStore.getState;
+  return (
+    <fieldset className={styles.fields}>
+      <legend>Playback</legend>
+      <label className={styles.choice}>
+        Speed
+        <select
+          className={styles.figures}
+          value={speed}
+          onChange={(e) => {
+            act().setSpeed(Number(e.currentTarget.value));
+            blur(e);
+          }}
+        >
+          {SPEEDS.map((v) => (
+            <option key={v} value={v}>
+              {v}×
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.choice}>
+        Quality
+        <select
+          value={quality}
+          onChange={(e) => {
+            act().setQuality(e.currentTarget.value as Quality);
+            blur(e);
+          }}
+        >
+          {QUALITIES.map((q) => (
+            <option key={q} value={q}>
+              {QUALITY_LABEL[q]}
+            </option>
+          ))}
+        </select>
+      </label>
+    </fieldset>
+  );
+}
+
+export default function Settings({ playback = false }: { playback?: boolean }) {
   const s = useSettings((x) => x.settings);
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -84,6 +144,7 @@ export default function Settings() {
           role="dialog"
           aria-label="Settings"
         >
+          {playback && <Playback />}
           <fieldset className={styles.fields}>
             <legend>Show</legend>
             <Toggle
@@ -138,7 +199,9 @@ export default function Settings() {
               onChange={(on) => set({ muted: !on })}
             />
             <label className={styles.scale}>
-              <span>Volume {Math.round(s.volume * 100)}%</span>
+              <span>
+                <Digits text={`Volume ${Math.round(s.volume * 100)}%`} />
+              </span>
               <input
                 type="range"
                 min={0}
@@ -154,7 +217,9 @@ export default function Settings() {
             </label>
           </fieldset>
           <label className={styles.scale}>
-            <span>HUD size {Math.round(s.hudScale * 100)}%</span>
+            <span>
+              <Digits text={`HUD size ${Math.round(s.hudScale * 100)}%`} />
+            </span>
             <input
               type="range"
               min={HUD_SCALE.min}
@@ -174,7 +239,9 @@ export default function Settings() {
             {KEYS.map(([k, what]) => (
               <div key={k}>
                 <dt>
-                  <kbd>{k}</kbd>
+                  <kbd>
+                    <Digits text={k} />
+                  </kbd>
                 </dt>
                 <dd>{what}</dd>
               </div>

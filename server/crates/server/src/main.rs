@@ -12,8 +12,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use demoviewer_server::app::build_app;
+use demoviewer_server::background::schedule_background;
 use demoviewer_server::config;
 use demoviewer_server::errors::with_causes;
+use demoviewer_server::hidden;
+use demoviewer_server::identity::{classify, Input};
+use demoviewer_server::import::spawn_importer;
 use demoviewer_server::jobs::spawn_runner;
 use demoviewer_server::matches::upgrade_summaries;
 use demoviewer_server::ratelimit::RateLimiter;
@@ -22,6 +26,9 @@ use demoviewer_server::worker;
 use tracing_subscriber::EnvFilter;
 
 const HEALTHCHECK: &str = "healthcheck";
+/// `hide <steamid>` / `unhide <steamid>`: edit the hidden profiles ([`hidden::edit`]).
+const HIDE: &str = "hide";
+const UNHIDE: &str = "unhide";
 /// How long the health check waits for `/healthz`, connecting included.
 const HEALTHCHECK_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -32,6 +39,9 @@ fn main() -> ExitCode {
     }
     if args.first().is_some_and(|a| a == HEALTHCHECK) {
         return healthcheck();
+    }
+    if let Some(cmd) = args.first().filter(|a| *a == HIDE || *a == UNHIDE) {
+        return hide(cmd == HIDE, &args[1..]);
     }
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -49,6 +59,32 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             tracing::error!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Hides a profile (or shows it again) in the data directory's list, which the running server
+/// reads again within a minute. Any form of Steam id is taken (a link, a friend code, …).
+fn hide(hide: bool, args: &[OsString]) -> ExitCode {
+    let id = match args.first().and_then(|a| a.to_str()).map(classify) {
+        Some(Input::SteamId(id)) if args.len() == 1 => id,
+        _ => {
+            eprintln!("usage: demoviewer-server {HIDE}|{UNHIDE} <steamid>");
+            return ExitCode::from(2);
+        }
+    };
+    let cfg = config::from_env();
+    match hidden::edit(&cfg.data_dir, id, hide) {
+        Ok(()) => {
+            println!("{id} {}", if hide { "hidden" } else { "shown" });
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!(
+                "cannot edit {}: {e}",
+                cfg.data_dir.join(hidden::FILE).display()
+            );
             ExitCode::FAILURE
         }
     }
@@ -76,6 +112,11 @@ async fn run() -> Result<(), String> {
         tracing::info!(summaries = n, "match summaries upgraded from their packs");
     }
     let jobs = spawn_runner(store.clone(), cfg.clone());
+    // After the upgrade: a summary it rewrote without ranks is parsed again from its original.
+    tokio::spawn(schedule_background(store.clone(), jobs.clone()));
+    if let Some(dir) = cfg.import_dir.clone() {
+        spawn_importer(store.clone(), jobs.clone(), dir);
+    }
     let limiter = Arc::new(RateLimiter::new(cfg.ingests_per_hour));
     let app = build_app(cfg.clone(), store.clone(), jobs, limiter);
 

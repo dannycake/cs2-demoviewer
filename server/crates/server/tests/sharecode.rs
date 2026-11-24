@@ -167,6 +167,7 @@ fn replay(match_id: u64) -> Resolved {
         match_id,
         url: replay_url(&ids_for(match_id)),
         played_unix: Some(1_761_163_200),
+        info: None,
     }
 }
 
@@ -312,6 +313,7 @@ async fn an_answer_for_another_code_of_the_match_is_bad() {
         match_id,
         url: real_url,
         played_unix: None,
+        info: None,
     };
     let late = answer.clone();
     let fake = FakeResolver::answering(move |_| Ok(late.clone()));
@@ -526,6 +528,21 @@ async fn fake_gcbot(health: Value) -> (Url, Arc<AtomicUsize>) {
                         StatusCode::OK.into_response()
                     }
                     12 => (StatusCode::OK, "x".repeat(1 << 20)).into_response(),
+                    // The GC's whole match info: about 100 KB, the size of a long match's.
+                    14 => Json(json!({
+                        "matchId": "14",
+                        "url": "http://replay183.valve.net/730/000000000000000000014_0000000001.dem.bz2",
+                        "playedAt": null,
+                        "info": {
+                            "matchid": "14",
+                            "padding": "x".repeat(100_000),
+                            "roundstatsall": [
+                                {"reservation": {"game_type": 1}},
+                                {"reservation": {"game_type": 8, "account_ids": [39734273]}},
+                            ],
+                        },
+                    }))
+                    .into_response(),
                     _ => refusal(StatusCode::INTERNAL_SERVER_ERROR, "internal"),
                 }
             }),
@@ -575,6 +592,18 @@ async fn the_client_maps_gcbots_answers() {
     ] {
         assert_eq!(resolve(id).await, Err(err), "{id}");
     }
+}
+
+#[tokio::test]
+async fn a_lookup_keeps_the_gc_match_info() {
+    let (url, _) = fake_gcbot(json!({"steam": "online", "gc": true, "queued": 0})).await;
+    let client = GcbotClient::with_timeout(url, Duration::from_millis(500));
+    let found = client.resolve(&code_for(14)).await.unwrap();
+    let info = found.info.expect("the GC's match info");
+    assert_eq!(info["matchid"], "14");
+    assert_eq!(demoviewer_server::gcbot::gc_game_type(&info), Some(8));
+    // An answer from before gcbot kept it has none.
+    assert_eq!(client.resolve(&code_for(1)).await.unwrap().info, None);
 }
 
 /// `/health` is asked once at the start and then every 30 s, not on every question; Steam and

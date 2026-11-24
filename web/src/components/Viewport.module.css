@@ -31,6 +31,15 @@
   mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
 }
 
+/* Over the canvas while the map's first world loads: the view is black until there is a map to
+   see, not players and hands in an empty scene. */
+.cover {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  pointer-events: none;
+}
+
 /* Below the HUD's round bar, which is about 4.5em of --hud-size tall. */
 .banners {
   position: absolute;
@@ -54,10 +63,9 @@
   padding: var(--pad-1);
   border-radius: var(--r);
   font-size: var(--fs-dense);
-  background: rgba(9, 8, 6, 0.94);
+  background: var(--panel-strong);
   border: 1px solid var(--line-soft);
   border-left: 2px solid var(--warn);
-  text-transform: lowercase;
 }
 
 .banner::before,

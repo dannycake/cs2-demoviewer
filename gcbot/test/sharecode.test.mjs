@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { describe, it } from 'node:test';
-import { ALPHABET, decodeShareCode, extractShareCode } from '../src/sharecode.mjs';
+import { ALPHABET, decodeShareCode, encodeShareCode, extractShareCode } from '../src/sharecode.mjs';
 
 const CODE = 'CSGO-GADqf-jjyJ8-cSP2r-smZRo-TO2xK';
 
@@ -70,5 +70,61 @@ describe('decodeShareCode', () => {
       compared++;
     }
     assert.ok(compared > 50, `only ${compared} codes fit`);
+  });
+});
+
+describe('encodeShareCode', () => {
+  it("encodes akiver/csgo-sharecode's README vector", () => {
+    const details = {
+      matchId: '3230642215713767580',
+      outcomeId: '3230647599455273103',
+      token: 55788,
+    };
+    assert.equal(encodeShareCode(details), CODE);
+  });
+
+  it("is decodeShareCode's inverse, and globaloffensive's decoder reads what it writes", () => {
+    const { ShareCode } = createRequire(import.meta.url)('globaloffensive-sharecode');
+    let seed = 11;
+    const u64 = () => {
+      let n = 0n;
+      for (let i = 0; i < 4; i++) {
+        seed = (seed * 1103515245 + 12345) % 2 ** 31;
+        n = (n << 16n) | BigInt(seed & 0xffff);
+      }
+      return n.toString();
+    };
+    const all = [
+      { matchId: '0', outcomeId: '0', token: 0 },
+      { matchId: '18446744073709551615', outcomeId: '18446744073709551615', token: 65535 },
+      ...Array.from({ length: 50 }, (_, i) => ({
+        matchId: u64(),
+        outcomeId: u64(),
+        token: i * 1309,
+      })),
+    ];
+    for (const details of all) {
+      const code = encodeShareCode(details);
+      assert.deepEqual(decodeShareCode(code), details, code);
+      const theirs = new ShareCode(code).decode();
+      assert.deepEqual({ ...theirs, token: Number(theirs.token) }, details, code);
+    }
+  });
+
+  it('gives null for parts that do not make a code', () => {
+    for (const bad of [
+      { matchId: '-1', outcomeId: '1', token: 1 },
+      { matchId: '18446744073709551616', outcomeId: '1', token: 1 },
+      { matchId: '1', outcomeId: '0x10', token: 1 },
+      { matchId: '1', outcomeId: '', token: 1 },
+      { matchId: '1', outcomeId: null, token: 1 },
+      { matchId: 1, outcomeId: '1', token: 1 },
+      { matchId: '1', outcomeId: '1', token: 65_536 },
+      { matchId: '1', outcomeId: '1', token: -1 },
+      { matchId: '1', outcomeId: '1', token: 1.5 },
+      { matchId: '1', outcomeId: '1', token: '1' },
+    ]) {
+      assert.equal(encodeShareCode(bad), null, JSON.stringify(bad));
+    }
   });
 });

@@ -3,7 +3,7 @@
 Watch a CS2 match back in 3D, in your browser, on the game's own maps, with its own player
 models and sounds.
 
-### [Open the viewer: cs.skunk.to](https://cs.skunk.to)
+### [Open the viewer: skunk.club](https://skunk.club)
 
 Drop in a demo, paste a match share code or a Valve replay link, and watch.
 
@@ -45,8 +45,8 @@ The screenshots are from two IEM Cologne 2026 matches, Spirit vs MIBR on Mirage 
 - CS2's own sounds, placed in the world: shots, reloads, footsteps by surface, grenades, the
   bomb and the announcer.
 - A HUD like the game's: kill feed, player list, player card, round bar, scoreboard (K, A, D,
-  ADR, KAST, HS%, utility damage and an approximation of HLTV's Rating 2.0) and a summary after
-  each round.
+  ADR, KAST, HS%, utility damage and skunk.club's rating (kills, survival, KAST, ADR,
+  multi-kills and opening duels; 1.00 is the average)) and a summary after each round.
 - Highlights (3k, 4k, ace, clutches, ninja defuses, collaterals, no-scopes, wallbangs), a reel
   that plays them back to back, and a kill cam for each death.
 - A 2D radar, as a minimap or full screen. Full screen, Nuke, Vertigo and Train show both levels
@@ -57,15 +57,33 @@ The screenshots are from two IEM Cologne 2026 matches, Spirit vs MIBR on Mirage 
   3D view runs at Low with smaller textures.
 - A match link pasted into Discord or a chat app shows a title and a preview card with the
   score.
-- Matches aren't listed anywhere. Each one is reachable only by its link.
+- Every match the server holds is listed on its players' profiles. Profiles, matches and
+  tournaments (`/events`, one page per event with its matches) are public pages that search
+  engines index. Demo ids stay unguessable. Match titles carry the team names and the
+  tournament when the demo has them.
+- Three short guides at `/guides/{slug}` (watching a demo in the browser, tracking your
+  matches, watching a FACEIT demo), and Atom feeds of new replays at `/feed.xml` and
+  `/events/{slug}/feed.xml`.
+- `/oembed` gives Discord the provider and author lines above a pasted link's embed.
+- New match, tournament and profile pages are sent to Bing and the other IndexNow search
+  engines in batches, so they are found without waiting for a crawl.
+- On a profile, each map and each match expands in place to its full figures: the stats, the
+  replay breakdown (weapons, clutches, trades, utility, sides), and a note when a game is not
+  in the totals.
+- Sign in through Steam to share your match history: paste the authentication code and your
+  latest match token from Steam's support page, and every match you finish from then on is
+  stored with its replay. Steam only walks forward from a token you give, so an older token
+  fetches everything since it, as far back as 30 days, when Valve deletes replays. Older
+  matches come in by uploading the demos CS2 downloaded.
 
 ## What's supported
 
 | | Supported | Not yet |
 | --- | --- | --- |
 | Maps | Ancient, Anubis, Cache, Dust II, Inferno, Mirage, Nuke, Overpass, Train, Vertigo | Every other map. A demo on one still opens, with the scoreboard, kill feed and rounds, but no 3D view or radar. |
-| Demos | CS2 demos from Valve matchmaking and Premier (5v5). Tournament GOTV demos work too: the screenshots are from two. | Wingman, FACEIT, casual and community-server demos are untested. CS:GO demos aren't supported. |
-| Getting a demo in | Uploading a `.dem`, `.dem.bz2` or `.dem.gz` file. A match share code (`CSGO-xxxxx-…`), on a server running gcbot. A Valve replay link (`http://replayN.valve.net/730/….dem.bz2`). | Links to anywhere else (FACEIT, HLTV, file hosts) are refused. Download the demo and upload it instead. |
+| Demos | CS2 demos from Valve matchmaking and Premier (5v5). Tournament GOTV demos work too: the screenshots are from two. | FACEIT demos are supported and get a tab of their own beside the Valve modes. Wingman, casual and community-server demos are untested. CS:GO demos aren't supported. |
+| Getting a demo in | Uploading a `.dem`, `.dem.bz2` or `.dem.gz` file, one at a time. A match share code (`CSGO-xxxxx-…`), on a server running gcbot. A Valve replay link (`http://replayN.valve.net/730/….dem.bz2`). Each match then appears on its players' profiles. | A FACEIT match room link is accepted when the server has a FACEIT Data API key, but FACEIT does not give its demo files to the free API, so today the demo itself has to be uploaded; it then attaches to the player's FACEIT history. Links to anywhere else (HLTV, file hosts) are refused. Download the demo and upload it instead. |
+| FACEIT on profiles | With a FACEIT Data API key: the player's level, Elo, win rate and match count, a FACEIT button, and an "On FACEIT" list of their last 20 matches (kept for players who share their match history) with a Replay link where the site holds the demo. A word in the search box that isn't a Steam name is tried as a FACEIT nickname. | Without the key only the level and Elo show, and there is no match list. |
 | Desktop browsers | Chrome and other Chromium browsers. The end-to-end tests run on Chromium. | Firefox and desktop Safari aren't covered by the tests. |
 | Phones | Android and iPhone, at the Low preset. The phone layout is tested in Chromium's Pixel 7 emulation, and memory was measured in WebKit's iPhone 13 emulation. | No automated tests on real phones. |
 
@@ -133,6 +151,8 @@ The settings that matter most:
 | `DEMOVIEWER_GCBOT_URL` | unset | gcbot's address. Unset, the server turns share codes away. |
 | `DEMOVIEWER_TRUSTED_PROXIES` | `127.0.0.0/8, ::1` | Behind a reverse proxy or a tunnel, the address it connects from, so rate limits count each visitor and not the proxy. |
 | `DEMOVIEWER_CACHE_BYTES` | unset | A cap on the packs kept. Unset, they are kept forever. |
+| `DEMOVIEWER_STEAM_API_KEY` | unset | A Steam Web API key, for profiles' Steam facts (name, avatar, bans, hours), custom URL names and match-history tracking. |
+| `DEMOVIEWER_TRACKING_KEY` | unset | 64 hex digits (`openssl rand -hex 32`) that seal tracked players' authentication codes at rest. Unset, nobody can start tracking. |
 
 The rest, the limits and the API are in [`server/README.md`](server/README.md).
 
@@ -190,9 +210,10 @@ Disk: `assets/raw/`, the exported files the build works from, came to 28 GB for 
 What the server serves is 1.2 GB. You can delete `assets/raw/` after a build, but the next build
 then rips everything again.
 
-The killfeed's weapon icons are drawn from the ripped weapon models, so they aren't in the repo
-either: after a build, `node tools/weapon-icons.mjs` writes `web/public/weapons.png`. Without it
-the killfeed, player list and player card show no weapon icons; nothing else changes.
+The killfeed's weapon icons are drawn from the ripped weapon models: after a build,
+`node tools/weapon-icons.mjs` writes `web/public/weapons.png` again. The repo carries one copy
+of that sprite sheet so a checkout shows weapon icons before it has built anything; it is the
+one file here derived from Valve's assets (see [License](#license)).
 
 After a CS2 update, run `tools/build-assets.sh all --force` to rip again. The full log of a
 build is `assets/build.log`. [`tools/README.md`](tools/README.md) explains each step and the size
@@ -227,9 +248,22 @@ run them.
   typeface.
 
 Counter-Strike 2 and its maps, models, textures and sounds belong to Valve. This is a fan
-project. It isn't affiliated with or endorsed by Valve.
+project. It isn't affiliated with or endorsed by Valve or by FACEIT.
 
 ## License
 
 MIT. See [LICENSE](LICENSE). The vendored parser keeps its own MIT license, and JetBrains Mono
 its OFL.
+
+Two files are not ours to license, and the MIT license does not cover them:
+
+- `web/public/weapons.png`, the killfeed's weapon silhouettes, is rendered from Counter-Strike
+  2's weapon models. Those models and their designs are Valve Corporation's, and so is whatever
+  of them is left in this file. Valve has not licensed it to this project or to you. It is here
+  only so the viewer can show which weapon made a kill, and it will be taken out if Valve asks
+  (contact@skunk.legal). Nothing else in the repository is made from Valve's assets: the maps,
+  models, textures and sounds are built on your own machine from your own copy of the game.
+- `web/public/faceit.svg` is FACEIT's mark, used only to label FACEIT matches and accounts.
+
+Counter-Strike and Steam are trademarks of Valve Corporation; FACEIT and its mark are trademarks
+of FACEIT.

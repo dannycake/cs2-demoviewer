@@ -4,8 +4,44 @@ import { pageTitle, parseRoute, routeToPath, type Route } from '../src/router';
 const at = (path: string) => parseRoute(new URL(path, 'http://x'));
 
 describe('parseRoute', () => {
-  it('reads / as the upload view', () => {
-    expect(parseRoute(new URL('http://x/'))).toEqual({ view: 'upload' });
+  it('reads / as the home view', () => {
+    expect(parseRoute(new URL('http://x/'))).toEqual({ view: 'home' });
+  });
+
+  const vanity = { view: 'profile', ref: { kind: 'vanity', name: 'skunk' } };
+  const steamid = {
+    view: 'profile',
+    ref: { kind: 'steamid', id: '76561198000000001' },
+  };
+  it.each([
+    ['/', { view: 'home' }],
+    ['/id/skunk', vanity],
+    ['/id/skunk/', vanity],
+    ['/id/skunk/games', vanity],
+    ['/profiles/76561198000000001', steamid],
+    ['/profiles/76561198000000001/games/?tab=all', steamid],
+    ['/legal', { view: 'legal' }],
+    ['/track', { view: 'track' }],
+    ['/events', { view: 'events' }],
+    ['/events/', { view: 'events' }],
+    ['/events/iem_cologne-2026', { view: 'event', slug: 'iem_cologne-2026' }],
+    [
+      '/guides/watch-faceit-demos',
+      { view: 'guide', slug: 'watch-faceit-demos' },
+    ],
+    ['/guides/Bad_Slug', { view: 'home' }],
+    ['/guides', { view: 'guides' }],
+    ['/guides/', { view: 'guides' }],
+    ['/p/x', { view: 'home' }],
+  ])('reads %s', (path, route) =>
+    expect(parseRoute(new URL(path, 'https://skunk.club'))).toEqual(route)
+  );
+
+  it('reads a percent-escaped custom URL name', () => {
+    expect(at('/id/a%2Eb')).toEqual({
+      view: 'profile',
+      ref: { kind: 'vanity', name: 'a.b' },
+    });
   });
 
   it('reads /d/<id> with round and tick', () => {
@@ -34,7 +70,7 @@ describe('parseRoute', () => {
     });
   });
 
-  it('treats any other path as the upload view', () => {
+  it('treats any other path as the home view', () => {
     for (const p of [
       '/d',
       '/d/',
@@ -42,8 +78,16 @@ describe('parseRoute', () => {
       '/x/abc',
       '/upload',
       '/d/a%2Fb',
+      '/id/',
+      '/profiles/',
+      '/profiles/abc',
+      '/legal/x',
+      '/events/Upper',
+      '/events/-a',
+      '/events/a/b',
+      `/events/${'a'.repeat(65)}`,
     ]) {
-      expect(at(p), p).toEqual({ view: 'upload' });
+      expect(at(p), p).toEqual({ view: 'home' });
     }
   });
 });
@@ -56,7 +100,22 @@ describe('routeToPath', () => {
   });
 
   it('writes only the parts that are set', () => {
-    expect(routeToPath({ view: 'upload' })).toBe('/');
+    expect(routeToPath({ view: 'home' })).toBe('/');
+    expect(routeToPath({ view: 'legal' })).toBe('/legal');
+    expect(routeToPath({ view: 'track' })).toBe('/track');
+    expect(routeToPath({ view: 'events' })).toBe('/events');
+    expect(routeToPath({ view: 'event', slug: 'iem_x' })).toBe('/events/iem_x');
+    expect(routeToPath({ view: 'guide', slug: 'a-b' })).toBe('/guides/a-b');
+    expect(routeToPath({ view: 'guides' })).toBe('/guides');
+    expect(
+      routeToPath({ view: 'profile', ref: { kind: 'vanity', name: 'a b' } })
+    ).toBe('/id/a%20b');
+    expect(
+      routeToPath({
+        view: 'profile',
+        ref: { kind: 'steamid', id: '76561198000000001' },
+      })
+    ).toBe('/profiles/76561198000000001');
     expect(routeToPath({ view: 'demo', demoId: 'abc' })).toBe('/d/abc');
     expect(routeToPath({ view: 'demo', demoId: 'abc', tick: 0 })).toBe(
       '/d/abc?t=0'
@@ -65,7 +124,14 @@ describe('routeToPath', () => {
 
   it('round-trips through parseRoute', () => {
     const routes: Route[] = [
-      { view: 'upload' },
+      { view: 'home' },
+      { view: 'legal' },
+      { view: 'track' },
+      { view: 'events' },
+      { view: 'event', slug: 'iem_x' },
+      { view: 'guide', slug: 'watch-faceit-demos' },
+      { view: 'profile', ref: { kind: 'vanity', name: 'some_one' } },
+      { view: 'profile', ref: { kind: 'steamid', id: '76561198000000001' } },
       { view: 'demo', demoId: 'AkofogeJhPjXzm7asXSmgN' },
       { view: 'demo', demoId: 'abc', round: 0, tick: 5 },
       { view: 'demo', demoId: 'abc', round: 23 },
@@ -255,12 +321,16 @@ describe('the moment in a link', () => {
 });
 
 describe('pageTitle', () => {
-  it('names the app, then the map and the date when they are known', () => {
+  it('names the page, then the date when known, then the site, as the server does', () => {
     expect(pageTitle('de_mirage', '2026-10-21')).toBe(
-      'cs.skunk.to — de_mirage — 2026-10-21'
+      'de_mirage · 2026-10-21 · skunk.club'
     );
-    expect(pageTitle('de_mirage')).toBe('cs.skunk.to — de_mirage');
-    expect(pageTitle(null, '2026-10-21')).toBe('cs.skunk.to');
-    expect(pageTitle()).toBe('cs.skunk.to');
+    expect(pageTitle('Alpha1')).toBe('Alpha1 · skunk.club');
+    expect(pageTitle(null, '2026-10-21')).toBe('skunk.club');
+    expect(pageTitle()).toBe('skunk.club');
+  });
+
+  it('never writes an em dash', () => {
+    expect(pageTitle('Mirage 13–9', '2026-10-21')).not.toContain('—');
   });
 });

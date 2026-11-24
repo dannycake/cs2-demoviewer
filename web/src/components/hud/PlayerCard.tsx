@@ -1,6 +1,6 @@
 // Bottom left, in POV: the followed player. Name and money, health and armour,
-// the weapon in hand with its magazine, the grenades carried, kills and deaths, and state
-// tags. A click opens the scoreboard. Over it, once the followed player has died this round
+// the weapon in hand with the grenades carried and its magazine, on one row, kills and deaths,
+// and state tags. A click opens the scoreboard. Over it, once the followed player has died this round
 // (and no reel plays), "Kill cam" replays that death, as `K` does. Compact (the narrow
 // layout), it keeps the name, money, health, armour and the weapon with its magazine, and
 // drops the weapon's name, the grenades and the footer.
@@ -9,6 +9,7 @@ import { countRender, useDerived } from '../../state/derive';
 import { directedFollow, playbackStore, shownAt } from '../../state/store';
 import { lastDeath } from '../../sim/killcam';
 import { statsThrough } from '../../sim/stats';
+import Digits from './Digits';
 import { Helmet, Kit, Vest } from './icons';
 import { playerCardModel } from './models';
 import { useScoreboard } from './scoreboard-state';
@@ -87,7 +88,7 @@ export default function PlayerCard({ compact = false }: { compact?: boolean }) {
               {c.armor > 0 && (
                 <span
                   className={styles.armor}
-                  title={c.helmet ? 'Armour and helmet' : 'Armour'}
+                  title={c.helmet ? 'Armor and helmet' : 'Armor'}
                 >
                   {c.helmet ? <Helmet /> : <Vest />}
                   {c.armor}
@@ -110,20 +111,20 @@ export default function PlayerCard({ compact = false }: { compact?: boolean }) {
               {!compact && (
                 <span className={styles.handName}>{c.weapon.label}</span>
               )}
+              {!compact && c.grenades.length > 0 && (
+                <span className={styles.nades} aria-label="Grenades">
+                  {c.grenades.map((g, i) => (
+                    <WeaponIcon
+                      key={`${g}${i}`}
+                      name={g}
+                      label={g}
+                      height={1.45}
+                    />
+                  ))}
+                </span>
+              )}
               {c.ammo !== null && <span className={styles.ammo}>{c.ammo}</span>}
             </span>
-            {!compact && c.grenades.length > 0 && (
-              <span className={styles.nades} aria-label="Grenades">
-                {c.grenades.map((g, i) => (
-                  <WeaponIcon
-                    key={`${g}${i}`}
-                    name={g}
-                    label={g}
-                    height={1.1}
-                  />
-                ))}
-              </span>
-            )}
           </>
         ) : (
           <span className={styles.deadNote}>Dead</span>
@@ -131,8 +132,9 @@ export default function PlayerCard({ compact = false }: { compact?: boolean }) {
         {!compact && (
           <span className={styles.cardFoot}>
             <span className={styles.kd}>
-              {count(c.kills, 'kill', 'kills')},{' '}
-              {count(c.deaths, 'death', 'deaths')}
+              <Digits
+                text={`${count(c.kills, 'kill', 'kills')}, ${count(c.deaths, 'death', 'deaths')}`}
+              />
             </span>
             {c.tags.map((t) => (
               <span key={t} className={styles.tag} data-tag={t}>

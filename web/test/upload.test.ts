@@ -4,6 +4,7 @@ import {
   CHUNK_SIZE,
   RETRY_DELAY_MS,
   UploadError,
+  ingestFaceitMatch,
   ingestShareCode,
   ingestUrl,
   isDemoFile,
@@ -445,5 +446,31 @@ describe('ingestShareCode', () => {
     const fetchFn = (async () => json({}, 202)) as typeof fetch;
     const err = await ingestShareCode(CODE, { fetchFn }).catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
+  });
+});
+
+describe('ingestFaceitMatch', () => {
+  const ROOM = '1-2f3e4d5c-6b7a-4980-8f1e-2d3c4b5a6978';
+
+  it('posts the match id and returns the demo id', async () => {
+    const seen: { url: string; body: unknown }[] = [];
+    const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return json({ demoId: 'fromfaceit' }, 202);
+    }) as typeof fetch;
+    expect(await ingestFaceitMatch(ROOM, { fetchFn })).toEqual({
+      demoId: 'fromfaceit',
+      cached: false,
+    });
+    expect(seen).toEqual([{ url: '/api/demos', body: { faceitMatch: ROOM } }]);
+  });
+
+  it("rejects with the server's text", async () => {
+    const fetchFn = (async () =>
+      json({ error: 'FACEIT demos must be uploaded' }, 422)) as typeof fetch;
+    const err = await ingestFaceitMatch(ROOM, { fetchFn }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.message).toBe('FACEIT demos must be uploaded');
+    expect(err.status).toBe(422);
   });
 });

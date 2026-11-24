@@ -51,7 +51,7 @@ export function stepTick(m: ScrubberModel, tick: number): number {
 
 /**
  * Time in the round as `m:ss` from the freeze end; the freeze time before it counts down
- * as `-m:ss` (whole seconds, rounded away from the freeze end).
+ * as `−m:ss`, with a minus sign (whole seconds, rounded away from the freeze end).
  */
 export function roundClock(
   round: RoundInfo,
@@ -61,12 +61,12 @@ export function roundClock(
   const s = (tick - round.freeze_end_tick) / (tickRate > 0 ? tickRate : 64);
   const whole = s < 0 ? Math.ceil(-s) : Math.floor(s);
   const text = `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
-  return s < 0 && whole > 0 ? `-${text}` : text;
+  return s < 0 && whole > 0 ? `\u2212${text}` : text;
 }
 
 /**
- * "Round 7 · T 4 : 3 CT": the round's number and the score going into it, so the title does
- * not give the round's result away. It is the round's own score after it, less the winner's
+ * "Round 7 · CT 3 : 4 T": the round's number and the score going into it, CT first as the round
+ * bar and the scoreboard have it, so the title does not give the round's result away. It is the round's own score after it, less the winner's
  * point: the pack's scores are by side, so the round before (`rounds[r - 1]`) has them on the
  * other sides after a halftime or overtime switch. Empty when there is no round `r`.
  */
@@ -75,5 +75,5 @@ export function roundTitle(rounds: readonly RoundInfo[], r: number): string {
   if (!info) return '';
   const t = Math.max(0, info.score_t - (info.winner === 2 ? 1 : 0));
   const ct = Math.max(0, info.score_ct - (info.winner === 3 ? 1 : 0));
-  return `Round ${info.number} · T ${t} : ${ct} CT`;
+  return `Round ${info.number} · CT ${ct} : ${t} T`;
 }

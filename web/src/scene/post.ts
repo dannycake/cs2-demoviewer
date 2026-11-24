@@ -10,9 +10,10 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import type { Pass } from 'three/addons/postprocessing/Pass.js';
+import { FullScreenQuad, Pass } from 'three/addons/postprocessing/Pass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { CopyShader } from 'three/addons/shaders/CopyShader.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { LuminosityHighPassShader } from 'three/addons/shaders/LuminosityHighPassShader.js';
@@ -448,6 +449,128 @@ export class EffectsBloomPass extends UnrealBloomPass {
   }
 }
 
+/**
+ * A depth of field for the homepage video (`tools/home-video.mjs`), Dennis Gustafsson's single-pass
+ * bokeh ("Bokeh depth of field in a single pass", 2018): each pixel gathers a golden-angle spiral
+ * of the scene's draw, a sample counting where its own blur (by its depth) reaches this far, a
+ * sample behind this pixel no more than twice this pixel's blur, so a sharp subject does not
+ * bleed over the soft background behind it. Off unless `setDof` turns it on.
+ */
+const DofShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    tDepth: { value: null as THREE.Texture | null },
+    cameraNear: { value: 0.1 },
+    cameraFar: { value: 1000 },
+    focus: { value: 2 },
+    /** Blur in drawing-buffer pixels per dioptre off focus. */
+    scale: { value: 10 },
+    maxBlur: { value: 12 },
+    texel: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    #include <packing>
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
+    uniform float cameraNear;
+    uniform float cameraFar;
+    uniform float focus;
+    uniform float scale;
+    uniform float maxBlur;
+    uniform vec2 texel;
+    varying vec2 vUv;
+    const float GOLDEN_ANGLE = 2.39996323;
+    const float RAD_SCALE = 0.5;
+    float depthAt(vec2 uv) {
+      return -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, cameraNear, cameraFar);
+    }
+    float blurAt(float z) {
+      return clamp(abs(1.0 / focus - 1.0 / z) * scale, 0.0, maxBlur);
+    }
+    void main() {
+      float z0 = depthAt(vUv);
+      float size0 = blurAt(z0);
+      vec4 c0 = texture2D(tDiffuse, vUv);
+      vec3 color = c0.rgb;
+      float tot = 1.0;
+      float radius = RAD_SCALE;
+      float ang = 0.0;
+      for (int i = 0; i < 400; i++) {
+        if (radius >= maxBlur) break;
+        vec2 tc = vUv + vec2(cos(ang), sin(ang)) * texel * radius;
+        vec3 sc = texture2D(tDiffuse, tc).rgb;
+        float sz = depthAt(tc);
+        float ss = blurAt(sz);
+        if (sz > z0) ss = clamp(ss, 0.0, size0 * 2.0);
+        float m = smoothstep(radius - 0.5, radius + 0.5, ss);
+        color += mix(color / tot, sc, m);
+        tot += 1.0;
+        radius += RAD_SCALE / radius;
+        ang += GOLDEN_ANGLE;
+      }
+      gl_FragColor = vec4(color / tot, c0.a);
+    }`,
+};
+
+/**
+ * `DofShader` drawn into a target of its own and copied back, as the
+ * composer's write buffer may be the one whose depth the shader reads (a feedback loop).
+ */
+class DofPass extends Pass {
+  readonly material = new THREE.ShaderMaterial({
+    ...DofShader,
+    uniforms: THREE.UniformsUtils.clone(DofShader.uniforms),
+    depthTest: false,
+    depthWrite: false,
+  });
+  private readonly copy = new THREE.ShaderMaterial({
+    ...CopyShader,
+    uniforms: THREE.UniformsUtils.clone(CopyShader.uniforms),
+    depthTest: false,
+    depthWrite: false,
+  });
+  private readonly quad = new FullScreenQuad();
+  private readonly target = new THREE.WebGLRenderTarget(1, 1, {
+    type: THREE.HalfFloatType,
+  });
+
+  get uniforms(): Record<string, THREE.IUniform> {
+    return this.material.uniforms;
+  }
+
+  setSize(w: number, h: number): void {
+    this.target.setSize(w, h);
+  }
+
+  render(
+    renderer: THREE.WebGLRenderer,
+    writeBuffer: THREE.WebGLRenderTarget,
+    readBuffer: THREE.WebGLRenderTarget
+  ): void {
+    this.material.uniforms.tDiffuse.value = readBuffer.texture;
+    this.quad.material = this.material;
+    renderer.setRenderTarget(this.target);
+    this.quad.render(renderer);
+    this.copy.uniforms.tDiffuse.value = this.target.texture;
+    this.quad.material = this.copy;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.quad.render(renderer);
+  }
+
+  dispose(): void {
+    this.material.dispose();
+    this.copy.dispose();
+    this.quad.dispose();
+    this.target.dispose();
+  }
+}
+
 export class PostStack {
   /** False when the device cannot run the stack; `render` then always draws plainly. */
   readonly supported: boolean;
@@ -458,6 +581,8 @@ export class PostStack {
   private readonly renderPass: RenderPass | null = null;
   private readonly gtao: GTAOPass | null = null;
   private readonly bloom: EffectsBloomPass | null = null;
+  /** The depth of field (`DofShader`), off until `setDof`. */
+  private readonly dof: DofPass | null = null;
   private on = false;
   private width = 0;
   private height = 0;
@@ -510,6 +635,9 @@ export class PostStack {
         composer.addPass(renderPass);
         composer.addPass(gtao);
         composer.addPass(bloom);
+        const dof = new DofPass();
+        dof.enabled = false;
+        composer.addPass(dof);
         composer.addPass(new OutputPass());
         composer.addPass(vignette);
         composer.addPass(new SMAAPass());
@@ -518,6 +646,7 @@ export class PostStack {
         this.renderPass = renderPass;
         this.gtao = gtao;
         this.bloom = bloom;
+        this.dof = dof;
         this.width = w;
         this.height = h;
         this.bindDepth();
@@ -559,6 +688,21 @@ export class PostStack {
   /** The passes in order; none when unsupported. */
   get passes(): readonly Pass[] {
     return this.composer?.passes ?? [];
+  }
+
+  /**
+   * The depth of field on (focused `focus` metres away, `scale` pixels of
+   * blur per dioptre off focus at a 1080-pixel-high frame, at most `max`), or off with null.
+   */
+  setDof(o: { focus: number; scale: number; max: number } | null): void {
+    if (!this.dof) return;
+    this.dof.enabled = o !== null;
+    if (!o) return;
+    const k = this.height / 1080;
+    const u = this.dof.uniforms;
+    u.focus.value = o.focus;
+    u.scale.value = o.scale * k;
+    u.maxBlur.value = o.max * k;
   }
 
   /** The linear brightness a pixel must pass to bloom (BLOOM_THRESHOLD until told otherwise). */
@@ -606,6 +750,14 @@ export class PostStack {
     }
     this.bindDepth();
     if (this.bloom) this.bloom.sceneTarget = this.composer.readBuffer;
+    if (this.dof?.enabled) {
+      const u = this.dof.uniforms;
+      u.tDepth.value = this.composer.readBuffer.depthTexture;
+      const cam = camera as THREE.PerspectiveCamera;
+      u.cameraNear.value = cam.near;
+      u.cameraFar.value = cam.far;
+      (u.texel.value as THREE.Vector2).set(1 / this.width, 1 / this.height);
+    }
     this.composer.render(0);
   }
 

@@ -16,11 +16,12 @@ use axum::Router;
 use demoviewer_server::config::Config;
 use demoviewer_server::gcbot::{ResolveError, Resolved};
 use demoviewer_server::jobs::{spawn_runner_with, Hooks, Job, MAX_DOWNLOADS, NO_ROUNDS};
-use demoviewer_server::matches::{summarize, MatchSummary};
+use demoviewer_server::matches::{summarize, GameMode, MatchSummary};
 use demoviewer_server::sharecode::{decode, ShareCode};
 use demoviewer_server::store::{DemoRecord, Source, Status, Store};
 
 use common::{fake_demo, sha_hex, tiny_match, wait_until_finished, FakeResolver};
+use demoviewer_server::originals::restore_original;
 
 /// A store in a fresh temp dir (kept alive by the returned guard).
 fn store() -> (tempfile::TempDir, Arc<Config>, Arc<Store>) {
@@ -846,10 +847,10 @@ async fn a_done_job_writes_the_match_summary_beside_the_pack() {
     assert_eq!(files_in(&cfg.data_dir.join("tmp")), Vec::<String>::new());
 }
 
-/// What the record knows and the parse cannot, Valve's match id and when the match was played
-/// (a share code's), goes into the summary. An alias gives a summary those it lacks, so the page
-/// of a demo uploaded first and posted as a share code later still says when it was played; one
-/// the summary has already is kept. The match index follows the files.
+/// What the record knows and the parse cannot, Valve's match id, when the match was played and
+/// the GC's game type (a share code's), goes into the summary. An alias gives a summary those it
+/// lacks, so the page of a demo uploaded first and posted as a share code later still says when
+/// it was played; one the summary has already is kept. The match index follows the files.
 #[tokio::test]
 async fn a_summary_takes_the_match_id_and_played_time_from_the_record() {
     let (_dir, cfg, store) = store();
@@ -862,6 +863,7 @@ async fn a_summary_takes_the_match_id_and_played_time_from_the_record() {
         let id = enqueue_upload_from(&jobs, &cfg, &store, demo, Source::Sharecode, |r| {
             r.match_id = Some(match_id.to_owned());
             r.played_unix = Some(played);
+            r.gc_game_type = Some(8);
         });
         let store = store.clone();
         async move { wait_until_finished(&store, &id).await }
@@ -890,6 +892,7 @@ async fn a_summary_takes_the_match_id_and_played_time_from_the_record() {
     assert_eq!(r.status, Status::Done, "{r:?}");
     let s = summary(&cfg, &sha);
     assert_eq!(ids(&s), known("3712345678901234568", 1_760_000_100));
+    assert_eq!(s.gc_game_type, Some(8));
     assert_eq!(store.matches().get(&sha).as_deref(), Some(&s));
     assert_eq!(s.created_unix, first.created_unix);
     assert_eq!(s.map, "de_nuke");
@@ -905,6 +908,70 @@ async fn a_summary_takes_the_match_id_and_played_time_from_the_record() {
         2,
         "one summary per pack"
     );
+    assert_eq!(files_in(&cfg.data_dir.join("tmp")), Vec::<String>::new());
+}
+
+/// A FACEIT match's record gives its summary the FACEIT match id (`faceitMatchId`), and makes
+/// the match FACEIT's though its server's name does not say so. An alias gives the id to the
+/// summary of the same demo uploaded first, which lacked it, and with it the FACEIT mode, so
+/// the match is under the FACEIT tab at once rather than at the next summary upgrade.
+#[tokio::test]
+async fn an_alias_carries_the_faceit_id_into_its_summary() {
+    let (_dir, cfg, store) = store();
+    let hooks = Hooks {
+        parse: Arc::new(|_: &Path| Ok(tiny_match("de_inferno"))),
+        ..Hooks::default()
+    };
+    let jobs = spawn_runner_with(store.clone(), cfg.clone(), hooks);
+    let faceit = |demo: &[u8], match_id: &str| {
+        let match_id = match_id.to_owned();
+        let id = enqueue_upload_from(&jobs, &cfg, &store, demo, Source::Faceit, |r| {
+            r.faceit_match_id = Some(match_id);
+        });
+        let store = store.clone();
+        async move { wait_until_finished(&store, &id).await }
+    };
+
+    let fetched = fake_demo(1000);
+    let r = faceit(&fetched, "1-aaaa").await;
+    assert_eq!(
+        (r.status, r.source),
+        (Status::Done, Source::Faceit),
+        "{r:?}"
+    );
+    let s = summary(&cfg, &sha_hex(&fetched));
+    assert_eq!(s.faceit_match_id.as_deref(), Some("1-aaaa"));
+    assert_eq!(
+        (s.server_name.as_str(), s.mode),
+        ("test", Some(GameMode::Faceit))
+    );
+    assert!(
+        store.has_original(&sha_hex(&fetched)),
+        "kept before the parse"
+    );
+
+    let mut uploaded = fake_demo(1000);
+    uploaded[16] ^= 1;
+    let sha = sha_hex(&uploaded);
+    let first = enqueue_upload(&jobs, &cfg, &store, &uploaded);
+    assert_eq!(
+        wait_until_finished(&store, &first).await.status,
+        Status::Done
+    );
+    let s = summary(&cfg, &sha);
+    assert_eq!((s.faceit_match_id, s.mode), (None, Some(GameMode::Other)));
+    let json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(store.summary_path(&sha)).unwrap()).unwrap();
+    assert!(json.get("faceitMatchId").is_none(), "no id, no key: {json}");
+    let r = faceit(&uploaded, "1-bbbb").await;
+    assert_eq!(r.status, Status::Done, "{r:?}");
+    let s = summary(&cfg, &sha);
+    assert_eq!(s.faceit_match_id.as_deref(), Some("1-bbbb"));
+    assert_eq!(s.mode, Some(GameMode::Faceit));
+    assert_eq!(store.matches().get(&sha).as_deref(), Some(&s));
+    let json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(store.summary_path(&sha)).unwrap()).unwrap();
+    assert_eq!(json["faceitMatchId"], "1-bbbb");
     assert_eq!(files_in(&cfg.data_dir.join("tmp")), Vec::<String>::new());
 }
 
@@ -960,6 +1027,64 @@ async fn packs_are_kept_forever_unless_a_cache_limit_is_set() {
 /// 3230647599455273103, token 55788.
 const CODE: &str = "CSGO-GADqf-jjyJ8-cSP2r-smZRo-TO2xK";
 
+/// The GC's whole match info, which gcbot hands over with the replay URL, is kept beside the
+/// match as `gc/<match id>.json`, and its game type goes on the record and into the summary.
+#[tokio::test]
+async fn a_share_code_job_stores_the_gc_info_beside_the_match() {
+    const MATCH: u64 = 3230642215713767580;
+    let demo = fake_demo(300_000);
+    let body = gz(&demo);
+    let addr = serve(Router::new().route(
+        "/730/003230647599455273103_0000055788.dem.bz2",
+        get(move || async move { body }),
+    ))
+    .await;
+    let url: url::Url = format!(
+        "http://replay183.valve.net:{}/730/003230647599455273103_0000055788.dem.bz2",
+        addr.port()
+    )
+    .parse()
+    .unwrap();
+    let info = serde_json::json!({
+        "matchid": MATCH.to_string(),
+        "roundstatsall": [{"reservation": {"game_type": 8, "account_ids": [39734273]}}],
+    });
+    let answer = info.clone();
+    let fake = FakeResolver::answering(move |_| {
+        Ok(Resolved {
+            match_id: MATCH,
+            url: url.clone(),
+            played_unix: None,
+            info: Some(answer.clone()),
+        })
+    });
+    let (_dir, cfg, store) = store();
+    let hooks = Hooks {
+        parse: Arc::new(|_: &Path| Ok(tiny_match("de_inferno"))),
+        download_exempt: vec![addr],
+        download_hosts: vec![("replay183.valve.net".into(), addr)],
+        resolver: Some(fake),
+        ..Hooks::default()
+    };
+    let jobs = spawn_runner_with(store.clone(), cfg.clone(), hooks);
+    let (rec, _) = store.claim_match(&decode(CODE).unwrap(), &Store::new_id());
+    jobs.enqueue(Job::ShareCode {
+        demo_id: rec.id.clone(),
+        code: decode(CODE).unwrap(),
+        slot: None,
+    });
+    let r = wait_until_finished(&store, &rec.id).await;
+    assert_eq!(r.status, Status::Done, "{r:?}");
+    assert_eq!(r.gc_game_type, Some(8));
+    let kept: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(cfg.data_dir.join(format!("gc/{MATCH}.json"))).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(kept, info);
+    let summary = store.matches().get(r.sha256.as_deref().unwrap()).unwrap();
+    assert_eq!(summary.gc_game_type, Some(8));
+}
+
 /// A share code: `resolving` while gcbot is asked, then its replay URL goes the way of a URL
 /// job, and the record (with its share code) and the match summary keep Valve's match id and
 /// when the match was played. The replay host is served by a local server
@@ -987,6 +1112,7 @@ async fn a_share_code_is_looked_up_then_ingested_from_its_replay_url() {
             match_id: MATCH,
             url: url.clone(),
             played_unix: Some(PLAYED),
+            info: None,
         })
     });
     let (_dir, cfg, store) = store();
@@ -1173,7 +1299,7 @@ fn a_match_is_claimed_once() {
     store.matches().insert(MatchSummary {
         sha256: sha.clone(),
         match_id: Some("9".into()),
-        ..summarize(&tiny_match("de_nuke"))
+        ..summarize(&tiny_match("de_nuke"), false)
     });
     let (d, created) = store.claim_match(&match_code(9), &Store::new_id());
     assert!(created && d.id != upload);
@@ -1190,5 +1316,155 @@ fn a_match_is_claimed_once() {
     assert!(
         created,
         "a done record without its pack answered for the match"
+    );
+}
+
+/// A runner whose parse answers `tiny_match`, except for a demo whose byte 16 is 0.
+fn originals_runner() -> (
+    tempfile::TempDir,
+    Arc<Config>,
+    Arc<Store>,
+    demoviewer_server::jobs::Jobs,
+) {
+    let (dir, cfg, store) = store();
+    let hooks = Hooks {
+        parse: Arc::new(|p: &Path| {
+            if std::fs::read(p).unwrap()[16] == 0 {
+                Err(demoviewer_server::parse::ParseError(
+                    "demo parser: broken".into(),
+                ))
+            } else {
+                Ok(tiny_match("de_vertigo"))
+            }
+        }),
+        ..Hooks::default()
+    };
+    let jobs = spawn_runner_with(store.clone(), cfg.clone(), hooks);
+    (dir, cfg, store, jobs)
+}
+
+#[tokio::test]
+async fn a_parsed_upload_keeps_its_original_compressed() {
+    let (_dir, cfg, store, jobs) = originals_runner();
+    let mut demo = fake_demo(200_000);
+    demo[16] = 1;
+    let id = enqueue_upload(&jobs, &cfg, &store, &demo);
+    let r = wait_until_finished(&store, &id).await;
+    assert_eq!(r.status, Status::Done, "{r:?}");
+    let sha = sha_hex(&demo);
+    assert!(store.has_original(&sha));
+    let back = cfg.data_dir.join("restored.dem");
+    restore_original(&store.original_path(&sha), &back, u64::MAX).unwrap();
+    assert_eq!(std::fs::read(&back).unwrap(), demo);
+    assert_eq!(files_in(&cfg.data_dir.join("tmp")), Vec::<String>::new());
+}
+
+/// A demo Valve served (a replay link, a share code, a tracked match) is a real match: when the
+/// parser fails on it, its original is kept for a re-parse by a fixed parser.
+#[tokio::test]
+async fn a_valve_demo_that_fails_to_parse_still_keeps_its_original() {
+    let (_dir, cfg, store, jobs) = originals_runner();
+    let mut demo = fake_demo(5_000);
+    demo[16] = 0;
+    let id = enqueue_upload_from(&jobs, &cfg, &store, &demo, Source::Url, |_| {});
+    let r = wait_until_finished(&store, &id).await;
+    assert_eq!(r.status, Status::Error, "{r:?}");
+    assert!(store.has_original(&sha_hex(&demo)));
+}
+
+/// An upload is anyone's bytes: one the parser fails on keeps no original, so junk shaped
+/// like a demo cannot fill `originals/` (security review of 3f14b4f).
+#[tokio::test]
+async fn an_upload_that_fails_to_parse_keeps_no_original() {
+    let (_dir, cfg, store, jobs) = originals_runner();
+    let mut demo = fake_demo(5_000);
+    demo[16] = 0;
+    let id = enqueue_upload(&jobs, &cfg, &store, &demo);
+    let r = wait_until_finished(&store, &id).await;
+    assert_eq!(r.status, Status::Error, "{r:?}");
+    assert!(!store.has_original(&sha_hex(&demo)));
+    assert_eq!(
+        files_in(&cfg.data_dir.join("originals")),
+        Vec::<String>::new()
+    );
+}
+
+#[tokio::test]
+async fn an_alias_writes_no_second_original() {
+    let (_dir, cfg, store, jobs) = originals_runner();
+    let mut demo = fake_demo(5_000);
+    demo[16] = 1;
+    let first = enqueue_upload(&jobs, &cfg, &store, &demo);
+    assert_eq!(
+        wait_until_finished(&store, &first).await.status,
+        Status::Done
+    );
+    let kept = store.original_path(&sha_hex(&demo));
+    let when = std::fs::metadata(&kept).unwrap().modified().unwrap();
+    let second = enqueue_upload(&jobs, &cfg, &store, &demo);
+    assert_eq!(
+        wait_until_finished(&store, &second).await.status,
+        Status::Done
+    );
+    assert_eq!(files_in(&cfg.data_dir.join("originals")).len(), 1);
+    assert_eq!(std::fs::metadata(&kept).unwrap().modified().unwrap(), when);
+}
+
+/// A match packed before originals were kept (a share code or a replay link of last month) has
+/// none; an upload of the same demo is aliased to it and gives it one, so it can be parsed
+/// again for what the old parse did not read.
+#[tokio::test]
+async fn an_upload_of_a_match_packed_without_an_original_gives_it_one() {
+    let (_dir, cfg, store, jobs) = originals_runner();
+    let mut demo = fake_demo(5_000);
+    demo[16] = 1;
+    let first = enqueue_upload_from(&jobs, &cfg, &store, &demo, Source::Url, |_| {});
+    assert_eq!(
+        wait_until_finished(&store, &first).await.status,
+        Status::Done
+    );
+    let sha = sha_hex(&demo);
+    // As if packed before originals were kept.
+    std::fs::remove_file(store.original_path(&sha)).unwrap();
+    let second = enqueue_upload(&jobs, &cfg, &store, &demo);
+    assert_eq!(
+        wait_until_finished(&store, &second).await.status,
+        Status::Done
+    );
+    // Kept just after the alias is done (best effort: a failure costs only a re-parse), so it
+    // may come a moment after the record says so.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !store.has_original(&sha) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the original was never kept"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let back = cfg.data_dir.join("restored.dem");
+    restore_original(&store.original_path(&sha), &back, u64::MAX).unwrap();
+    assert_eq!(std::fs::read(&back).unwrap(), demo);
+}
+
+#[tokio::test]
+async fn no_original_is_written_below_the_free_space_floor() {
+    let (_dir, cfg, store) = store_with(|c| c.min_free_bytes = u64::MAX / 4);
+    let jobs = spawn_runner_with(
+        store.clone(),
+        cfg.clone(),
+        Hooks {
+            parse: Arc::new(|_: &Path| Ok(tiny_match("de_vertigo"))),
+            ..Hooks::default()
+        },
+    );
+    let id = enqueue_upload(&jobs, &cfg, &store, &fake_demo(5_000));
+    let r = wait_until_finished(&store, &id).await;
+    assert_eq!(
+        (r.status, r.error.as_deref()),
+        (Status::Error, Some(demoviewer_server::store::LOW_DISK))
+    );
+    assert_eq!(
+        files_in(&cfg.data_dir.join("originals")),
+        Vec::<String>::new()
     );
 }

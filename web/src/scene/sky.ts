@@ -18,8 +18,8 @@ import {
   type PostStack,
 } from './post';
 
-/** The background while no map is loaded, and under a preset without the map's sky. */
-const BACKGROUND = 0x0b0d10;
+/** The background while no map is loaded, and under a preset without the map's sky: the page's black. */
+const BACKGROUND = 0x000000;
 /** Fog distances that put the fog out of reach. */
 const NO_FOG = 1e8;
 /** The fog of a view from inside a smoke, in metres. */

@@ -1,0 +1,226 @@
+[
+ {
+  "norms": {
+   "kills": 0.75,
+   "survival": 0.3,
+   "kast": 0.7,
+   "damage": 80.0,
+   "multi": 0.2,
+   "opening": 0.1,
+   "lines": 1
+  },
+  "line": {
+   "rounds": 20,
+   "kills": 15,
+   "deaths": 14,
+   "assists": 0,
+   "damage": 1600,
+   "kast_rounds": 14,
+   "multi_kills": [
+    1,
+    0,
+    0,
+    0
+   ],
+   "opening_wins": 2,
+   "opening_losses": 0
+  },
+  "rating": 1.0
+ },
+ {
+  "norms": {
+   "kills": 0.675,
+   "survival": 0.324,
+   "kast": 0.701,
+   "damage": 73.79,
+   "multi": 0.992,
+   "opening": 0.1,
+   "lines": 99
+  },
+  "line": {
+   "rounds": 24,
+   "kills": 0,
+   "deaths": 24,
+   "assists": 0,
+   "damage": 0,
+   "kast_rounds": 0,
+   "multi_kills": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "opening_wins": 0,
+   "opening_losses": 4
+  },
+  "rating": 0.0
+ },
+ {
+  "norms": {
+   "kills": 0.675,
+   "survival": 0.324,
+   "kast": 0.701,
+   "damage": 73.79,
+   "multi": 0.992,
+   "opening": 0.1,
+   "lines": 99
+  },
+  "line": {
+   "rounds": 22,
+   "kills": 27,
+   "deaths": 12,
+   "assists": 5,
+   "damage": 2310,
+   "kast_rounds": 18,
+   "multi_kills": [
+    3,
+    2,
+    0,
+    1
+   ],
+   "opening_wins": 6,
+   "opening_losses": 2
+  },
+  "rating": 1.641533
+ },
+ {
+  "norms": {
+   "kills": 0.675,
+   "survival": 0.324,
+   "kast": 0.701,
+   "damage": 73.79,
+   "multi": 0.992,
+   "opening": 0.1,
+   "lines": 99
+  },
+  "line": {
+   "rounds": 3,
+   "kills": 1,
+   "deaths": 3,
+   "assists": 0,
+   "damage": 180,
+   "kast_rounds": 1,
+   "multi_kills": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "opening_wins": 0,
+   "opening_losses": 1
+  },
+  "rating": 0.381183
+ },
+ {
+  "norms": {
+   "kills": 0.675,
+   "survival": 0.324,
+   "kast": 0.701,
+   "damage": 73.79,
+   "multi": 0.992,
+   "opening": 0.1,
+   "lines": 99
+  },
+  "line": {
+   "rounds": 0,
+   "kills": 0,
+   "deaths": 0,
+   "assists": 0,
+   "damage": 0,
+   "kast_rounds": 0,
+   "multi_kills": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "opening_wins": 0,
+   "opening_losses": 0
+  },
+  "rating": null
+ },
+ {
+  "norms": {
+   "kills": 0.675,
+   "survival": 0.324,
+   "kast": 0.701,
+   "damage": 73.79,
+   "multi": 0.992,
+   "opening": 0.1,
+   "lines": 99
+  },
+  "line": {
+   "rounds": 30,
+   "kills": 21,
+   "deaths": 20,
+   "assists": 6,
+   "damage": 2400,
+   "kast_rounds": 21,
+   "multi_kills": [
+    4,
+    1,
+    0,
+    0
+   ],
+   "opening_wins": 3,
+   "opening_losses": 3
+  },
+  "rating": 1.015572
+ },
+ {
+  "norms": {
+   "kills": 0.675,
+   "survival": 0.324,
+   "kast": 0.701,
+   "damage": 73.79,
+   "multi": 0.992,
+   "opening": 0.1,
+   "lines": 99
+  },
+  "line": {
+   "rounds": 16,
+   "kills": 4,
+   "deaths": 40,
+   "assists": 0,
+   "damage": 300,
+   "kast_rounds": 2,
+   "multi_kills": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "opening_wins": 0,
+   "opening_losses": 6
+  },
+  "rating": 0.179076
+ },
+ {
+  "norms": {
+   "kills": 0.675,
+   "survival": 0.324,
+   "kast": 0.701,
+   "damage": 73.79,
+   "multi": 0.0,
+   "opening": 0.1,
+   "lines": 99
+  },
+  "line": {
+   "rounds": 20,
+   "kills": 14,
+   "deaths": 13,
+   "assists": 3,
+   "damage": 1500,
+   "kast_rounds": 14,
+   "multi_kills": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "opening_wins": 2,
+   "opening_losses": 2
+  },
+  "rating": 1.028303
+ }
+]

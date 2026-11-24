@@ -19,6 +19,12 @@
 // 3D view first shows, and the world and the player models load then. Anywhere else the 3D view
 // loads as the demo opens, beside the pack.
 //
+// Until the match can be watched, the screen holds one panel and no HUD: what the server is
+// doing, the pack's bytes (of its size, with a bar, where the server says it), then the 3D view's
+// chunk and the map's first world with its bytes; or why the match cannot be opened, in the
+// site's words, with a way home. The HUD comes with the pack, and the server's scoreboard under
+// the viewer (`site/pre.ts`) goes then, not before.
+//
 // The clock loop, the sound and the preset a phone or a mobile GPU starts at are DemoView's
 // (`views/viewer-hooks`), not the 3D view's: they run whether or not the 3D view is up, and the
 // 3D view hands them its scene while it has one (`onScene`).
@@ -39,12 +45,16 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
+import { preload } from 'react-dom';
 import { mapManifest } from '../api/assets';
 import { pollDemo, type DemoStatus } from '../api/demos';
 import CameraBar from '../components/CameraBar';
 import ErrorBoundary from '../components/ErrorBoundary';
 import Hud from '../components/Hud';
 import Brand from '../components/hud/Brand';
+import Digits from '../components/hud/Digits';
+import { mapName } from '../components/hud/models';
+import { WEAPON_SPRITE } from '../components/hud/weapon-sprite';
 import Highlights from '../components/hud/Highlights';
 import Killfeed from '../components/hud/Killfeed';
 import PlayerCard from '../components/hud/PlayerCard';
@@ -55,16 +65,18 @@ import RoundFeed from '../components/hud/RoundFeed';
 import RoundStrip from '../components/hud/RoundStrip';
 import RoundSummary from '../components/hud/RoundSummary';
 import Scoreboard from '../components/hud/Scoreboard';
+import { useScoreboard } from '../components/hud/scoreboard-state';
 import Settings from '../components/hud/Settings';
 import Whiteout from '../components/hud/Whiteout';
 import { messageOf } from '../errors';
+import { errorCopy } from './error-copy';
 import { isPhone, readDevice, useHudLayout } from '../state/device';
 import { settingsStore, useSettings } from '../state/settings';
 import PlayerList from '../components/PlayerList';
 import Radar from '../components/Radar';
 import Transport from '../components/Transport';
-import type { ViewportProps } from '../components/Viewport';
-import { matchDate, matchTitle } from '../match-title';
+import type { ViewportProps, WorldLoad } from '../components/Viewport';
+import { matchPageTitle } from '../match-title';
 import { loadPack } from '../pack/client';
 import { pageTitle } from '../router';
 import { chunkOnce, useChunk } from '../use-chunk';
@@ -78,6 +90,10 @@ import {
 } from '../state/url';
 import { playbackStore, startAutoKillcam, usePlayback } from '../state/store';
 import type { FreePose } from '../router';
+import LoadingBar from '../site/LoadingBar';
+import OneInput from '../site/OneInput';
+import { tuckPre } from '../site/pre';
+import SiteBar from '../site/SiteBar';
 import styles from './DemoView.module.css';
 import { mapNotice, noRoundsNotice, type Notice } from './notices';
 import {
@@ -94,20 +110,55 @@ import {
 const loadViewport = chunkOnce(() => import('../components/Viewport'));
 
 /**
- * The 3D view once its chunk is in, and until then a note that it is on its way (in this view's
- * stylesheet: the 3D view's own comes with the chunk). The view mounts as soon as the chunk is
- * in, and always in a commit after the one that mounted DemoView: the device's preset
- * (`useDeviceQuality`) is set before the scene is made, on the page's first demo and on every
- * one after it. A chunk that will not load is thrown to the 3D view's Guard.
+ * A loading panel in the middle of the view: what is on its way, a line under it (figures in
+ * mono), and a bar of the fraction in when it is known.
+ */
+function LoadPanel({
+  title,
+  detail,
+  fraction = null,
+}: {
+  title: string;
+  detail?: string;
+  fraction?: number | null;
+}) {
+  return (
+    <div className={styles.panel} role="status" aria-live="polite">
+      <LoadingBar />
+      <p className={styles.panelTitle}>
+        <Digits text={title} />
+      </p>
+      {detail && (
+        <p className={styles.panelText}>
+          <Digits text={detail} />
+        </p>
+      )}
+      {fraction !== null && (
+        <span className={styles.progress}>
+          <span style={{ width: `${Math.min(1, fraction) * 100}%` }} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The 3D view once its chunk is in, and until then the loading panel saying so, once the match
+ * is in and the 3D view is what shows (before that the match's panel is the one; with the radar
+ * up, nothing). The view mounts as soon as the chunk is in, and always in a commit after the one
+ * that mounted DemoView: the device's preset (`useDeviceQuality`) is set before the scene is
+ * made, on the page's first demo and on every one after it. A chunk that will not load is thrown
+ * to the 3D view's Guard.
  */
 function LazyViewport(props: ViewportProps) {
   const Viewport = useChunk(loadViewport)?.default;
+  const waiting = usePlayback((s) => s.pack !== null && !s.radar);
   if (!Viewport)
-    return (
-      <p className={styles.viewLoading} role="status">
-        loading the 3D view…
-      </p>
-    );
+    return waiting ? (
+      <div className={styles.overlay}>
+        <LoadPanel title="Loading the 3D view" />
+      </div>
+    ) : null;
   return <Viewport {...props} />;
 }
 
@@ -122,6 +173,13 @@ const STATUS_TEXT: Record<DemoStatus['status'], string> = {
 
 function formatMB(bytes: number): string {
   return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+/** "4.2 MB", or "4.2 of 10.3 MB" with the size. */
+function bytesText(loaded: number, total: number | null): string {
+  return total
+    ? `${(loaded / 1048576).toFixed(1)} of ${formatMB(total)}`
+    : formatMB(loaded);
 }
 
 /**
@@ -179,9 +237,13 @@ export default function DemoView({ demoId }: { demoId: string }) {
   const error = usePlayback((s) => s.error);
   const progress = usePlayback((s) => s.progress);
   const hasPack = usePlayback((s) => s.pack !== null);
+  /** The match can be watched: the HUD shows (before, and on an error, only the panel). */
+  const live = hasPack && status !== 'error';
   const map = usePlayback((s) => s.pack?.header.map ?? null);
   const noRounds = usePlayback((s) => s.pack?.header.rounds.length === 0);
   const assetsMissing = usePlayback((s) => s.assetsMissing);
+  /** The map's first world on its way (the 3D view's `onWorldLoad`), or null. */
+  const [worldLoad, setWorldLoad] = useState<WorldLoad | null>(null);
   /** The demo whose notice was put away with "Watch without the map". */
   const [dismissed, setDismissed] = useState<string | null>(null);
   const hudScale = useSettings((s) => s.settings.hudScale);
@@ -204,6 +266,9 @@ export default function DemoView({ demoId }: { demoId: string }) {
     () => !opensOnRadar(readUrlState(new URL(window.location.href)), hud)
   );
   if (!show3d && hasPack && !radar) setShow3d(true);
+  // The weapons' silhouettes (the player list's, the card's, the killfeed's) come while the
+  // match loads, so the HUD shows with them rather than filling them in after.
+  preload(WEAPON_SPRITE, { as: 'image' });
   const view3d = useViewScene();
   const director = useSound(view3d);
   useClockLoop(view3d, director);
@@ -257,14 +322,20 @@ export default function DemoView({ demoId }: { demoId: string }) {
   // After the load's first request is on its way: a phone or a mobile GPU starts at `low`.
   useDeviceQuality();
 
-  // The tab names the match ("Mirage 13–9" and its day) once the server has its summary, else
+  // The server's scoreboard (`site/pre.ts`) goes once the match can be watched; while the pack
+  // loads, and after a failure, it stays.
+  useEffect(() => {
+    if (live) tuckPre();
+  }, [live]);
+
+  // The tab names the match, as the server's title does, once the server has its summary, else
   // the map once it is known. Until then it keeps the title the page came with: the server's
   // /d/ page already names a done match.
   const summary = demo?.summary ?? null;
   const shownMap = map ?? demo?.map;
   useEffect(() => {
     if (summary)
-      document.title = pageTitle(matchTitle(summary), matchDate(summary));
+      document.title = pageTitle(matchPageTitle(summary));
     else if (shownMap) document.title = pageTitle(shownMap);
   }, [summary, shownMap]);
 
@@ -327,7 +398,37 @@ export default function DemoView({ demoId }: { demoId: string }) {
       observer.disconnect();
       v.style.removeProperty('--transport-height');
     };
-  }, [narrow, hud]);
+  }, [narrow, hud, live]);
+
+  // Wide, the round bar is centred at the top; where it would run into the camera row at the
+  // right (a tablet's width, a big HUD size), it goes under the row (`data-stack`).
+  const top = useRef<HTMLDivElement>(null);
+  const cameraRow = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const v = view.current;
+    const t = top.current;
+    const c = cameraRow.current;
+    if (!v || !t || !c || narrow) return;
+    const check = () => {
+      const round = t.querySelector('[role="group"][aria-label="Round"]');
+      const stack =
+        !!round &&
+        round.getBoundingClientRect().right + 8 >
+          c.getBoundingClientRect().left;
+      if (v.dataset.stack !== String(stack)) v.dataset.stack = String(stack);
+    };
+    check();
+    // Without the observer (a test's DOM), the one check.
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(check);
+    for (const el of [v, t, c]) observer?.observe(el);
+    return () => {
+      observer?.disconnect();
+      delete v.dataset.stack;
+    };
+  }, [narrow, hud, live]);
+  /** Narrow, the open scoreboard takes the room the player card had. */
+  const scoreboardOpen = useScoreboard((s) => s.held || s.pinned);
 
   let overlay: ReactNode = null;
   let notice: Notice | null = null;
@@ -356,42 +457,40 @@ export default function DemoView({ demoId }: { demoId: string }) {
       </div>
     );
   } else if (status === 'error') {
+    const copy = errorCopy(error ?? '');
     overlay = (
       <div className={styles.panel} role="alert">
-        <p className={styles.panelTitle}>This demo could not be opened</p>
-        <p className={styles.panelText}>{error}</p>
-        <a className={styles.link} href="/">
-          Upload a demo
-        </a>
+        <p className={styles.panelTitle}>{copy.title}</p>
+        <p className={styles.panelText}>{copy.text}</p>
+        <div className={styles.actions}>
+          <a className={styles.button} href="/">
+            Upload a demo
+          </a>
+        </div>
       </div>
     );
   } else if (!hasPack) {
-    const text =
+    const title =
       demo && demo.status !== 'done'
         ? STATUS_TEXT[demo.status]
         : demo
-          ? `Loading the match${progress.loaded ? ` · ${formatMB(progress.loaded)}` : ''}`
-          : 'Looking up the demo';
+          ? `Loading the match${progress.loaded ? ` · ${bytesText(progress.loaded, progress.total)}` : ''}`
+          : 'Looking up the match';
     const fraction =
       demo?.status === 'done' && progress.total
-        ? Math.min(1, progress.loaded / progress.total)
+        ? progress.loaded / progress.total
         : null;
+    const detail = demo?.map
+      ? `${mapName(demo.map)}${demo.rounds ? ` · ${demo.rounds} rounds` : ''}`
+      : undefined;
+    overlay = <LoadPanel title={title} detail={detail} fraction={fraction} />;
+  } else if (worldLoad && !radar && map) {
     overlay = (
-      <div className={styles.panel} role="status" aria-live="polite">
-        <span className={styles.spinner} aria-hidden="true" />
-        <p className={styles.panelTitle}>{text}</p>
-        {demo?.map && (
-          <p className={styles.panelText}>
-            {demo.map}
-            {demo.rounds ? ` · ${demo.rounds} rounds` : ''}
-          </p>
-        )}
-        {fraction !== null && (
-          <span className={styles.progress}>
-            <span style={{ width: `${fraction * 100}%` }} />
-          </span>
-        )}
-      </div>
+      <LoadPanel
+        title="Loading the map"
+        detail={`${mapName(map)} · ${bytesText(worldLoad.loaded, worldLoad.total)}`}
+        fraction={worldLoad.total ? worldLoad.loaded / worldLoad.total : null}
+      />
     );
   }
 
@@ -403,7 +502,11 @@ export default function DemoView({ demoId }: { demoId: string }) {
     <>
       {show3d && (
         <Guard name="the 3D view" place={styles.viewNote} retry="pack" reload>
-          <LazyViewport onScene={view3d.onScene} pose={pose} />
+          <LazyViewport
+            onScene={view3d.onScene}
+            pose={pose}
+            onWorldLoad={setWorldLoad}
+          />
         </Guard>
       )}
       {debug && <Hud stats={view3d.scene?.stats ?? NO_STATS} />}
@@ -418,98 +521,110 @@ export default function DemoView({ demoId }: { demoId: string }) {
       </div>
     );
 
+  // With the HUD, the site's bar on top says where this is (the mark, the one input, sign-in);
+  // the viewer fills the screen under it.
   return (
-    <div
-      ref={view}
-      className={styles.view}
-      data-narrow={narrow}
-      style={{ '--hud-scale': hudScale } as CSSProperties}
-    >
-      {viewport}
-      {radar && (
-        <Guard name="the radar" place={styles.viewNote}>
-          <Radar mode="full" />
-        </Guard>
-      )}
-      <div className={styles.pov}>
-        <Guard name="the first-person overlay" place={styles.viewNote}>
-          <PovOverlay />
-          <Whiteout />
-        </Guard>
+    <>
+      <div className={`site site-chrome ${styles.siteBar}`}>
+        <SiteBar search={<OneInput variant="bar" />} />
       </div>
-      <div className={styles.left}>
-        {minimap && layout.minimap && !radar && hasPack && (
-          <Guard name="the minimap">
-            <Radar mode="mini" />
+      <div
+        ref={view}
+        className={`${styles.view} ${styles.underBar}`}
+        data-narrow={narrow}
+        data-scoreboard={scoreboardOpen}
+        style={{ '--hud-scale': hudScale } as CSSProperties}
+      >
+        {viewport}
+        {radar && (
+          <Guard name="the radar" place={styles.viewNote}>
+            <Radar mode="full" />
           </Guard>
         )}
-        <Guard name="the match title">
-          <Brand />
-        </Guard>
-        <Guard name="the player list">
-          <PlayerList mode={layout.playerList} />
-        </Guard>
-      </div>
-      <div className={styles.top}>
-        <Guard name="the round bar">
-          <RoundBar />
-        </Guard>
-        <Guard name="the reel banner">
-          <ReelBanner />
-        </Guard>
-        <Guard name="the round summary">
-          <RoundSummary />
-        </Guard>
-      </div>
-      <div className={styles.camera}>
-        <div className={styles.cameraRow}>
-          <Guard name="the settings">
-            <Settings />
-          </Guard>
-          <Guard name="the camera bar">
-            <CameraBar compact={narrow} />
-          </Guard>
-          <Guard name="the highlights">
-            <Highlights />
-          </Guard>
-        </div>
-        {!narrow && (
-          <Guard name="the killfeed">
-            <Killfeed rows={layout.killfeedRows} />
-          </Guard>
+        {live && (
+          <>
+            <div className={styles.pov}>
+              <Guard name="the first-person overlay" place={styles.viewNote}>
+                <PovOverlay />
+                <Whiteout />
+              </Guard>
+            </div>
+            <div className={styles.left}>
+              {minimap && layout.minimap && !radar && hasPack && (
+                <Guard name="the minimap">
+                  <Radar mode="mini" />
+                </Guard>
+              )}
+              <Guard name="the match title">
+                <Brand />
+              </Guard>
+              <Guard name="the player list">
+                <PlayerList mode={layout.playerList} />
+              </Guard>
+            </div>
+            <div ref={top} className={styles.top}>
+              <Guard name="the round bar">
+                <RoundBar />
+              </Guard>
+              <Guard name="the reel banner">
+                <ReelBanner />
+              </Guard>
+              <Guard name="the round summary">
+                <RoundSummary />
+              </Guard>
+            </div>
+            <div className={styles.camera}>
+              <div ref={cameraRow} className={styles.cameraRow}>
+                <Guard name="the settings">
+                  <Settings playback={narrow} />
+                </Guard>
+                <Guard name="the camera bar">
+                  <CameraBar compact={narrow} />
+                </Guard>
+                <Guard name="the highlights">
+                  <Highlights />
+                </Guard>
+              </div>
+              {!narrow && (
+                <Guard name="the killfeed">
+                  <Killfeed rows={layout.killfeedRows} />
+                </Guard>
+              )}
+            </div>
+            <div className={styles.feed}>
+              {layout.roundFeed && (
+                <Guard name="the round feed">
+                  <RoundFeed />
+                </Guard>
+              )}
+              {narrow && (
+                <Guard name="the killfeed">
+                  <Killfeed rows={layout.killfeedRows} />
+                </Guard>
+              )}
+              <Guard name="the player card">
+                <PlayerCard compact={layout.card === 'compact'} />
+              </Guard>
+            </div>
+            <div className={styles.transport}>
+              <div className={styles.strip}>
+                <Guard name="the round strip">
+                  <RoundStrip />
+                </Guard>
+              </div>
+              <Guard name="the transport">
+                <Transport ref={bar} />
+              </Guard>
+            </div>
+            <div className={styles.scoreboard}>
+              <Guard name="the scoreboard">
+                <Scoreboard columns={layout.scoreColumns} />
+              </Guard>
+            </div>
+          </>
         )}
+        {overlay && <div className={styles.overlay}>{overlay}</div>}
       </div>
-      <div className={styles.feed}>
-        {layout.roundFeed && (
-          <Guard name="the round feed">
-            <RoundFeed />
-          </Guard>
-        )}
-        {narrow && (
-          <Guard name="the killfeed">
-            <Killfeed rows={layout.killfeedRows} />
-          </Guard>
-        )}
-        <Guard name="the player card">
-          <PlayerCard compact={layout.card === 'compact'} />
-        </Guard>
-      </div>
-      <div className={styles.transport}>
-        <div className={styles.strip}>
-          <Guard name="the round strip">
-            <RoundStrip />
-          </Guard>
-        </div>
-        <Guard name="the transport">
-          <Transport ref={bar} />
-        </Guard>
-      </div>
-      <div className={styles.scoreboard}>
-        <Guard name="the scoreboard">
-          <Scoreboard columns={layout.scoreColumns} />
-        </Guard>
-      </div>
-      {overlay && <div className={styles.overlay}>{overlay}</div>}
-    </div>
+    </>
   );
 }

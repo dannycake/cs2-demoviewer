@@ -156,6 +156,7 @@ fn build(bytes: &[u8]) -> Result<Match, ParseError> {
         .map(|(steamid, name)| PlayerInfo {
             steamid,
             crosshair: table.crosshair(steamid).map(str::to_string),
+            rank: table.rank(steamid),
             name,
             team_by_round: spans
                 .iter()

@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
@@ -8,6 +10,13 @@ const server = 'http://127.0.0.1:8095';
 export default defineConfig({
   plugins: [react()],
   server: {
+    // The guides' HTML fragments live with the server (src/site/guides.ts imports them raw).
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        path.resolve(__dirname, '../server/crates/server/guides'),
+      ],
+    },
     proxy: {
       '/api': server,
       '/maps': server,

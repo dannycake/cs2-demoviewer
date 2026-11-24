@@ -13,7 +13,6 @@ import {
   scoreColumns,
   scoreCell,
   scoreboardRows,
-  steamProfileUrl,
   WHITEOUT_MAX,
   whiteoutAlpha,
 } from '../src/components/hud/models';
@@ -459,40 +458,14 @@ describe('scoreboardRows', () => {
     expect(scoreColumns('all')).toEqual(SCORE_COLUMNS);
   });
 
-  it("links each player's Steam profile, but not a bot's", () => {
+  it("links each player's profile on the site, but not a bot's", () => {
     const p = pack();
     p.header.players[1].steamid = '0';
     const [, t] = scoreboardRows([], p, new Timeline(p), 0, 1010);
     expect(t.rows.map((r) => [r.index, r.profile])).toEqual([
-      [0, 'https://steamcommunity.com/profiles/76561198000000000'],
+      [0, '/profiles/76561198000000000'],
       [1, null],
     ]);
-  });
-});
-
-describe('steamProfileUrl', () => {
-  it('is the profile of a SteamID64 and nothing else', () => {
-    // The first and last account numbers, and a newer account's 7656120… id.
-    for (const id of [
-      '76561197960265729',
-      '76561200000000001',
-      '76561202255233023',
-    ])
-      expect(steamProfileUrl(id), id).toBe(
-        `https://steamcommunity.com/profiles/${id}`
-      );
-    for (const id of [
-      '0',
-      '',
-      'BOT',
-      '7656119800000000',
-      '765611980000000000',
-      '86561198000000000',
-      '76561198000000000/../x',
-      '76561197960265728',
-      '76561202255233024',
-    ])
-      expect(steamProfileUrl(id), id).toBeNull();
   });
 });
 
@@ -570,6 +543,28 @@ describe('playerCardModel', () => {
 });
 
 describe('roundFeedRows', () => {
+  it('leaves the kills to the killfeed when asked, keeping the last four other events', () => {
+    const tl = new Timeline(
+      pack([
+        event('bomb_planted', 2400, { user_idx: 0, site: 1 }),
+        ...[2500, 2600, 2700, 2800, 2900].map((t) => death(t, 0, 2)),
+      ])
+    );
+    expect(roundFeedRows(tl, 0, 2950, false).map((r) => r.kind)).toEqual([
+      'kill',
+      'kill',
+      'kill',
+      'kill',
+    ]);
+    const rows = roundFeedRows(tl, 0, 2950, false, false);
+    expect(rows.map((r) => r.kind)).not.toContain('kill');
+    expect(rows.map((r) => r.kind)).toContain('plant');
+    // Keyed by the place in the round's whole feed, as with the kills.
+    const all = tl.allFeed(0);
+    for (const r of rows)
+      expect(all[Number(r.key.split(':')[1])].tick).toBe(r.tick);
+  });
+
   it('lists the last four events, oldest first, within 12 s while playing', () => {
     const tl = new Timeline(
       pack(
@@ -619,8 +614,14 @@ describe('brandModel', () => {
       })
     ).toEqual({
       map: 'Mirage',
-      place: 'Valve matchmaking, eu_north',
+      place: 'Valve matchmaking, EU North',
     });
+    expect(
+      brandModel({
+        map: 'de_nuke',
+        server_name: 'Valve Counter-Strike 2 us_north_central Server (x)',
+      }).place
+    ).toBe('Valve matchmaking, US North Central');
     expect(brandModel({ map: 'cs_office', server_name: 'My server' })).toEqual({
       map: 'Office',
       place: 'My server',

@@ -101,6 +101,20 @@ fn golden_mirage() {
     assert_eq!(h.tick_rate, 64);
     assert_eq!(h.tick_step, 2);
     assert_eq!(h.players.len(), 10);
+    // Each player's rank as the match started: Competitive per map (type 12) on this demo.
+    let rank = |name: &str| {
+        h.players
+            .iter()
+            .find(|p| p.name.starts_with(name))
+            .unwrap()
+            .rank
+            .unwrap()
+    };
+    assert_eq!(
+        (rank("Milo").kind, rank("Milo").value, rank("Milo").wins),
+        (12, 6, 32)
+    );
+    assert_eq!((rank("svi_").kind, rank("svi_").value), (12, 0)); // unranked on the map
     assert_eq!(h.rounds.len(), 24);
     let last = h.rounds.last().unwrap();
     assert_eq!((last.score_t, last.score_ct), (13, 11), "final score T:CT");
@@ -239,7 +253,7 @@ fn assert_world(m: &Match) {
 /// kill of a player on the other side once.
 fn assert_summary(m: &Match) {
     let h = &m.header;
-    let s = summarize(m);
+    let s = summarize(m, false);
     assert_eq!(s.map, "de_mirage");
     assert_eq!((s.rounds, s.score_t, s.score_ct), (24, 13, 11));
     assert_eq!(

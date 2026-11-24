@@ -1,5 +1,5 @@
-// Bottom right: what just happened in the round, in words: throws, the plant, the defuse,
-// kills. The newest is brightest.
+// Bottom right: what just happened in the round, in words: throws, the plant, the defuse (the
+// kills are the killfeed's, on screen with it). The newest is brightest.
 
 import { countRender, useDerived } from '../../state/derive';
 import { timelineFor } from '../../sim/timeline';
@@ -13,7 +13,7 @@ export default function RoundFeed() {
   const rows = useDerived(
     (s) =>
       s.pack
-        ? roundFeedRows(timelineFor(s.pack), s.round, s.tick, s.playing)
+        ? roundFeedRows(timelineFor(s.pack), s.round, s.tick, s.playing, false)
         : [],
     []
   );

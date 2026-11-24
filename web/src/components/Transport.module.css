@@ -1,14 +1,16 @@
 /* The transport bar. Play is the screen's one primary control (brand fill); everything else is
-   quiet chrome on the system's 30 px row. */
+   quiet chrome. Its controls are the camera row's height (DemoView's --cam-h) and its type the
+   HUD's size, so on a big screen it grows with the rest of the HUD; a finger gets 44 px. */
 .bar {
   display: flex;
   align-items: center;
   gap: var(--gap-2);
   height: var(--transport-height, 52px);
   padding: 0 var(--space-3);
-  background: rgba(9, 8, 6, 0.94);
+  background: var(--panel-strong);
+  backdrop-filter: blur(2px);
   border-top: 1px solid var(--line-soft);
-  font-size: var(--fs-body);
+  font-size: max(var(--fs-body), var(--hud-size, 13px));
 }
 
 .bar button {
@@ -31,27 +33,33 @@
   cursor: default;
 }
 
-.bar button:focus-visible,
-.speed select:focus-visible {
-  outline: 1px solid var(--brand);
-  outline-offset: 2px;
-}
-
 .bar .play {
   flex: none;
-  width: var(--ctl-h);
-  height: var(--ctl-h);
+  width: var(--cam-h, var(--ctl-h));
+  height: var(--cam-h, var(--ctl-h));
   background: var(--brand);
   color: var(--on-brand);
 }
 
-.bar .play:hover:not(:disabled) {
-  background: #ff8c3a;
+@media (hover: hover) {
+  .bar .play:hover:not(:disabled) {
+    background: var(--brand-hover);
+  }
+
+  .bar .step:hover:not(:disabled) {
+    background: var(--surface-2);
+    color: var(--text);
+  }
 }
 
 .bar .play:disabled {
   background: var(--surface-2);
   color: var(--text-mute);
+}
+
+.bar svg {
+  width: 1.15em;
+  height: 1.15em;
 }
 
 .rounds {
@@ -62,13 +70,8 @@
 }
 
 .step {
-  width: 24px;
-  height: 24px;
-}
-
-.bar .step:hover:not(:disabled) {
-  background: var(--surface-2);
-  color: var(--text);
+  width: max(24px, 1.8em);
+  height: max(24px, 1.8em);
 }
 
 .title {
@@ -83,19 +86,17 @@
   min-width: 6ch;
   text-align: right;
   color: var(--text-dim);
+  font-family: var(--mono);
 }
 
 .speed select {
-  font-size: var(--fs-dense);
+  height: var(--cam-h, var(--ctl-h));
+  font-size: max(var(--fs-dense), 0.92em);
 }
 
-.traffic {
-  flex: none;
-  min-width: 8ch;
-  color: var(--text-mute);
-  font-size: var(--fs-dense);
-  white-space: nowrap;
-  text-align: right;
+/* The speed reads in figures ("1×"): mono, as every number. */
+.figures select {
+  font-family: var(--mono);
 }
 
 .srOnly {
@@ -105,6 +106,14 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* A finger's targets, on a tablet as on a phone. */
+@media (pointer: coarse) {
+  .step {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -119,13 +128,19 @@
   }
 }
 
-/* Narrow (state/device): rows of 44 px touch targets, the scrubber on its own above them
-   (Scrubber.module.css), the rest wrapping as the width allows. */
+/* Narrow (state/device): one row of 44 px touch targets spread across the bar (speed and
+   quality are in Settings), the scrubber on a row of its own above it held upright
+   (Scrubber.module.css), and in the row between them on its side. */
 [data-narrow='true'] .bar {
   flex-wrap: wrap;
+  justify-content: space-between;
   height: auto;
   padding: 0 var(--space-2) var(--space-1);
   gap: 0 var(--gap-1);
+}
+
+[data-narrow='true'] .speed {
+  display: none;
 }
 
 [data-narrow='true'] .bar .play,
@@ -135,14 +150,22 @@
 }
 
 [data-narrow='true'] .rounds {
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 0;
 }
 
 [data-narrow='true'] .title {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: var(--fs-dense);
 }
 
-[data-narrow='true'] .speed select {
-  height: 44px;
+@media (orientation: landscape) {
+  [data-narrow='true'] .bar {
+    flex-wrap: nowrap;
+    padding: var(--space-1) var(--space-2);
+    gap: var(--gap-2);
+  }
 }

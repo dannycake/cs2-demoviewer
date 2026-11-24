@@ -3,7 +3,6 @@
 import { PackLoadError, type PackProgress } from './fetch';
 import type { PackReply, PackRequest } from './worker';
 import type { Pack } from './types';
-import { traffic } from '../net/traffic';
 
 export { PackLoadError };
 
@@ -38,7 +37,6 @@ export function loadPack(
         onProgress(msg.loaded, msg.total);
       } else if (msg.type === 'done') {
         finish();
-        traffic.add(msg.transferred);
         resolve(msg.pack);
       } else {
         finish();

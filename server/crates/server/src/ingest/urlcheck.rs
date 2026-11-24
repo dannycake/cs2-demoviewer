@@ -1,11 +1,12 @@
 //! The SSRF guard: which URLs the ingest may fetch, and which addresses it may never connect to.
 //!
 //! A URL passes [`check_url`] when its scheme is http or https and its host is one of Valve's
-//! replay servers (`replayN.valve.net`, nothing else: the owner's ruling 2026-10-24, so the
-//! server only ever fetches from Valve). That takes no DNS, so the API checks a posted URL with
-//! it alone, and the host a request names never reaches a resolver at post time. `download`
-//! checks every hop, the first and each redirect, the same way, so a redirect off Valve is
-//! refused; then resolves the hop's host and refuses it when any address is private
+//! replay servers (`replayN.valve.net`) or one of FACEIT's demo hosts ([`FACEIT_DEMO_HOSTS`]),
+//! each named exactly and nothing else (the owner's ruling 2026-10-24, widened on 2026-10-31
+//! from Valve alone to FACEIT's hosts too, so the server only ever fetches from those two).
+//! That takes no DNS, so the API checks a posted URL with it alone, and the host a request
+//! names never reaches a resolver at post time. `download` checks every hop, the first and
+//! each redirect, the same way, so a redirect off those hosts is refused; then resolves the hop's host and refuses it when any address is private
 //! ([`Guard::check_addresses`]), before the request; and checks the addresses again at connect
 //! time.
 
@@ -24,7 +25,7 @@ pub enum UrlError {
     Scheme,
     /// No host, or a bare name without a dot (`localhost`, `nas`).
     Host,
-    /// Not a Valve replay host (`replayN.valve.net`).
+    /// Not a Valve replay host (`replayN.valve.net`) or a FACEIT demo host.
     NotAllowed,
     /// The host is, or resolves to, a private, loopback, link-local, CGNAT or unspecified address.
     PrivateAddress,
@@ -43,14 +44,19 @@ impl fmt::Display for UrlError {
         match self {
             UrlError::Scheme => f.write_str("only http and https URLs are accepted"),
             UrlError::Host => f.write_str("the URL needs a public host name"),
-            UrlError::NotAllowed => f.write_str(
-                "only Valve replay links (http://replayN.valve.net/730/…) are accepted; upload the file or paste a share code instead",
-            ),
+            UrlError::NotAllowed => {
+                f.write_str("only Valve replay links (http://replayN.valve.net/730/…)")?;
+                if !FACEIT_DEMO_HOSTS.is_empty() {
+                    f.write_str(" and FACEIT demo links")?;
+                }
+                f.write_str(" are accepted; upload the file or paste a share code instead")
+            }
             UrlError::PrivateAddress => f.write_str("the URL points at a private or local address"),
             UrlError::Redirect(why) => write!(f, "redirect not followed: {why}"),
             UrlError::TooLarge => f.write_str("the file is larger than the size limit"),
-            UrlError::Http(404 | 410) => f.write_str(
-                "there is no demo at that link (HTTP 404): Valve keeps match replays for about a month, so it may have expired",
+            UrlError::Http(code @ (404 | 410)) => write!(
+                f,
+                "there is no demo at that link (HTTP {code}): it may have expired or been removed",
             ),
             UrlError::Http(code) => write!(f, "the server answered HTTP {code}"),
             UrlError::Io(msg) => f.write_str(msg),
@@ -201,8 +207,26 @@ fn check_parsed(url: Url) -> Result<Url, UrlError> {
     Ok(url)
 }
 
+/// Whether the URL's host is one a download may fetch from: a Valve replay host or a FACEIT
+/// demo host.
 fn allowed(url: &Url) -> bool {
-    url.host_str().is_some_and(is_replay_host)
+    url.host_str()
+        .is_some_and(|h| is_replay_host(h) || is_faceit_demo_host(h))
+}
+
+/// The hosts FACEIT serves match demos from, each named exactly (no suffix or wildcard
+/// match). Empty until the API spike names them; until then no FACEIT URL is fetched.
+pub const FACEIT_DEMO_HOSTS: &[&str] = &[];
+
+/// Whether `host` is one of [`FACEIT_DEMO_HOSTS`], compared exactly and ignoring case.
+pub fn is_faceit_demo_host(host: &str) -> bool {
+    host_listed(FACEIT_DEMO_HOSTS, host)
+}
+
+/// Whether `host` equals one entry of `list`, ignoring ASCII case; a suffix or prefix match
+/// never counts.
+fn host_listed(list: &[&str], host: &str) -> bool {
+    list.iter().any(|h| h.eq_ignore_ascii_case(host))
 }
 
 /// Whether `host` is one of Valve's replay servers, `replayN.valve.net`.
@@ -308,5 +332,43 @@ mod tests {
             addrs.iter().all(|a| a.port() == 80 && a.ip().is_loopback()),
             "{addrs:?}"
         );
+    }
+
+    /// Today the FACEIT list is empty, so only Valve's replay hosts pass; a listed host is
+    /// matched exactly, whatever its case, and never by suffix or prefix.
+    #[test]
+    fn faceit_demo_hosts_are_allowed_when_listed() {
+        let allowed_host =
+            |h: &str| allowed(&Url::parse(&format!("https://{h}/x.dem.gz")).unwrap());
+        assert!(allowed_host("replay183.valve.net"));
+        assert!(!allowed_host("demos.faceit.example"));
+        assert!(!is_faceit_demo_host("demos.faceit.example"));
+
+        let list = ["demos.faceit.example"];
+        assert!(host_listed(&list, "demos.faceit.example"));
+        assert!(host_listed(&list, "Demos.FACEIT.example"));
+        assert!(!host_listed(&list, "evil.demos.faceit.example"));
+        assert!(!host_listed(&list, "demos.faceit.example.evil.net"));
+        assert!(!host_listed(&list, "xdemos.faceit.example"));
+        assert!(!host_listed(&[], "demos.faceit.example"));
+    }
+
+    /// Every hop is checked against the same list: a redirect off it is refused, one back
+    /// onto a replay host is followed.
+    #[test]
+    fn a_redirect_off_the_list_is_refused() {
+        let from = Url::parse("https://replay183.valve.net/730/a.dem.bz2").unwrap();
+        for off in [
+            "https://cdn.example.com/a.dem",
+            "https://replay183.valve.net.evil.net/a.dem",
+            "http://127.0.0.1/a.dem",
+        ] {
+            assert_eq!(
+                check_redirect(&from, off),
+                Err(UrlError::NotAllowed),
+                "{off}"
+            );
+        }
+        assert!(check_redirect(&from, "https://replay9.valve.net/b.dem").is_ok());
     }
 }

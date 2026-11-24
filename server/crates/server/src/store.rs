@@ -2,10 +2,16 @@
 //! `uploads/<uploadId>/` (an unfinished upload's `meta.json` and chunks, kept by
 //! [`crate::uploads`]), `tmp/` (work files), `packs/<sha256hex>.dvpk.gz`,
 //! `matches/<sha256hex>.json` (each pack's match summary, all of them held in a
-//! [`MatchIndex`]), `og/<sha256hex>.jpg` (match pages' preview cards), `demos.json` (every
+//! [`MatchIndex`]), `originals/<sha256hex>.dem.zst` (every demo's original, zstd-compressed,
+//! [`crate::originals`]), `og/<sha256hex>.jpg` (match pages' preview cards), `demos.json` (every
 //! record, rewritten behind the changes by the store's saver thread, and `demos.json.prev`, the
-//! file before its last write). In memory the records are also indexed by the share code they
-//! came from and by sha.
+//! file before its last write). Beside them, kept by their own modules: `profiles/<steamid>.json`
+//! (Steam's facts about an account, [`crate::profiles`]), `profiles/vanities.json` (the custom
+//! URL names resolved, and those Steam said no account has, [`crate::profiles`]),
+//! `gc/<match id>.json` (the Game Coordinator's match info for a share code's match),
+//! `hidden.json` (hidden profiles, [`crate::hidden`]) and `imported.json` (the corpus demos
+//! imported, [`crate::import`]). In memory the records are also indexed by the share code they
+//! came from, by the FACEIT match they are of, and by sha.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs::{self, File};
@@ -45,6 +51,13 @@ pub enum Source {
     Upload,
     Url,
     Sharecode,
+    /// Fetched for a tracked player from their match history.
+    Tracked,
+    /// Imported from a directory of demos the server reads (the pro corpus).
+    Import,
+    /// Fetched for a FACEIT match ([`DemoRecord::faceit_match_id`]), from the demo FACEIT
+    /// links to it.
+    Faceit,
 }
 
 /// One demo id. Several ids may share a `sha256` (the same demo uploaded twice); they then
@@ -76,6 +89,23 @@ pub struct DemoRecord {
     /// time it is first loaded.
     #[serde(default)]
     pub failed_unix: Option<u64>,
+    /// The tournament an imported demo came from, as its corpus names it
+    /// ([`crate::import`]); copied into its match summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event: Option<String>,
+    /// The two teams of a pro match, as the corpus names them ([`crate::import`]); copied into
+    /// its match summary. Left out of the JSON when unknown, so existing records stay as they were.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub teams: Option<[String; 2]>,
+    /// The Game Coordinator's game type for a share code's match ([`crate::gcbot::gc_game_type`]);
+    /// copied into its match summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gc_game_type: Option<u32>,
+    /// FACEIT's id of the match the demo is of, for a demo fetched for a FACEIT match: what a
+    /// later claim of that match finds it by ([`Store::find_faceit`]); copied into its match
+    /// summary. Valve's id stays in `match_id`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faceit_match_id: Option<String>,
 }
 
 /// The error a demo shows once its pack was evicted.
@@ -130,17 +160,20 @@ pub struct Store {
     saving: Option<std::thread::JoinHandle<()>>,
 }
 
-/// Every record by id, and two indexes kept in step by [`Records::insert`],
+/// Every record by id, and three indexes kept in step by [`Records::insert`],
 /// [`Records::update`] and [`Records::retain`]: the ids of those a share code can find by that
 /// code ([`DemoRecord::sharecode`]; records in error are left out, as [`Store::find_match`]
-/// never takes one), and the ids of each sha. A post of a share code reads only its own code's
-/// few records (security audit 2026-10-23: it scanned every record under the lock), and a
-/// completed upload or parse only its sha's ([`Store::find_by_sha`], [`Store::alias_packed`];
-/// code-health review 2026-10-26: they scanned every record).
+/// never takes one), the ids of those a FACEIT match can find by its id, under the same rule
+/// ([`DemoRecord::faceit_match_id`], [`Store::find_faceit`]), and the ids of each sha. A post
+/// of a share code reads only its own code's few records (security audit 2026-10-23: it scanned
+/// every record under the lock), and a completed upload or parse only its sha's
+/// ([`Store::find_by_sha`], [`Store::alias_packed`]; code-health review 2026-10-26: they
+/// scanned every record).
 #[derive(Default)]
 struct Records {
     by_id: HashMap<String, Entry>,
     by_code: HashMap<String, BTreeSet<String>>,
+    by_faceit: HashMap<String, BTreeSet<String>>,
     by_sha: HashMap<String, BTreeSet<String>>,
     /// Counts the changes: every insert, update and removal makes the next one.
     gen: u64,
@@ -153,10 +186,12 @@ struct Entry {
     changed: u64,
 }
 
-/// What a record is indexed by: the share code that finds it, and its sha.
+/// What a record is indexed by: the share code and the FACEIT match id that find it, and its
+/// sha.
 #[derive(Default, PartialEq)]
 struct Keys {
     code: Option<String>,
+    faceit: Option<String>,
     sha: Option<String>,
 }
 
@@ -166,9 +201,18 @@ impl Records {
         r.sharecode.as_deref().filter(|_| r.status != Status::Error)
     }
 
+    /// The FACEIT match id `r` is found by, if any: none for a record in error, like its code
+    /// ([`Records::code_of`]), so a failed fetch of the match can be claimed again.
+    fn faceit_of(r: &DemoRecord) -> Option<&str> {
+        r.faceit_match_id
+            .as_deref()
+            .filter(|_| r.status != Status::Error)
+    }
+
     fn keys_of(r: &DemoRecord) -> Keys {
         Keys {
             code: Records::code_of(r).map(str::to_owned),
+            faceit: Records::faceit_of(r).map(str::to_owned),
             sha: r.sha256.clone(),
         }
     }
@@ -227,8 +271,9 @@ impl Records {
         }
         for id in gone {
             if let Some(e) = self.by_id.remove(&id) {
-                let Keys { code, sha } = Records::keys_of(&e.rec);
+                let Keys { code, faceit, sha } = Records::keys_of(&e.rec);
                 unindex(&mut self.by_code, &id, code);
+                unindex(&mut self.by_faceit, &id, faceit);
                 unindex(&mut self.by_sha, &id, sha);
             }
         }
@@ -237,6 +282,11 @@ impl Records {
     /// The records found by share code `code` (as [`sharecode::encode`] writes it).
     fn with_code<'a>(&'a self, code: &str) -> impl Iterator<Item = &'a DemoRecord> {
         self.with(&self.by_code, code)
+    }
+
+    /// The records found by FACEIT match id `id`.
+    fn with_faceit<'a>(&'a self, id: &str) -> impl Iterator<Item = &'a DemoRecord> {
+        self.with(&self.by_faceit, id)
     }
 
     /// The records of the demo with this sha.
@@ -263,6 +313,10 @@ impl Records {
         if before.code != now.code {
             unindex(&mut self.by_code, id, before.code);
             index(&mut self.by_code, id, now.code);
+        }
+        if before.faceit != now.faceit {
+            unindex(&mut self.by_faceit, id, before.faceit);
+            index(&mut self.by_faceit, id, now.faceit);
         }
         if before.sha != now.sha {
             unindex(&mut self.by_sha, id, before.sha);
@@ -298,7 +352,7 @@ impl Store {
     /// a corrupt summary, which is skipped ([`MatchIndex::load`]).
     pub fn open(cfg: &Config) -> io::Result<Store> {
         let data_dir = cfg.data_dir.clone();
-        for sub in ["uploads", "tmp", "packs", "matches", "og"] {
+        for sub in ["uploads", "tmp", "packs", "matches", "og", "originals"] {
             fs::create_dir_all(data_dir.join(sub))?;
         }
         clear_dir(&data_dir.join("tmp"))?;
@@ -312,7 +366,7 @@ impl Store {
                 interrupted += 1;
             }
         }
-        // The share-code and sha indexes are rebuilt as the records go in.
+        // The share-code, FACEIT and sha indexes are rebuilt as the records go in.
         let mut records = Records::default();
         for r in list {
             records.insert(r);
@@ -396,6 +450,16 @@ impl Store {
     /// created. Atomic under the index lock, so of many posts of one share code at once only
     /// one creates a record, and so only one lookup runs.
     pub fn claim_match(&self, code: &ShareCode, new_id: &str) -> (DemoRecord, bool) {
+        self.claim_match_from(code, new_id, Source::Sharecode)
+    }
+
+    /// [`Store::claim_match`] for a record from `source` (a tracked player's match).
+    pub fn claim_match_from(
+        &self,
+        code: &ShareCode,
+        new_id: &str,
+        source: Source,
+    ) -> (DemoRecord, bool) {
         let mut records = self.lock();
         if let Some(r) = self.match_record(&records, code) {
             return (r, false);
@@ -404,7 +468,7 @@ impl Store {
             status: Status::Resolving,
             match_id: Some(code.match_id.to_string()),
             sharecode: Some(sharecode::encode(code)),
-            ..new_record(new_id, Source::Sharecode)
+            ..new_record(new_id, source)
         };
         records.insert(rec.clone());
         self.changed(&records);
@@ -413,14 +477,53 @@ impl Store {
 
     /// [`Store::find_match`] in `records`, through their share-code index.
     fn match_record(&self, records: &Records, code: &ShareCode) -> Option<DemoRecord> {
-        let code = sharecode::encode(code);
+        self.answering(records.with_code(&sharecode::encode(code)))
+    }
+
+    /// The record that answers for FACEIT match `id` (FACEIT's id of it), if any, by the rule a
+    /// share code's does ([`Store::find_match`]): one made for this match that is not an error,
+    /// so a fetch under way or the demo it brought. A `Done` record counts only while its pack
+    /// is on disk; `Done` wins over one in progress, then the oldest.
+    pub fn find_faceit(&self, id: &str) -> Option<DemoRecord> {
+        self.answering(self.lock().with_faceit(id))
+    }
+
+    /// The record that answers for FACEIT match `id` ([`Store::find_faceit`]), or else a new
+    /// FACEIT record `new_id` for it, played at `played_unix` (FACEIT's match detail); returns
+    /// the record and whether it was created. Atomic under the index lock, so of a match posted
+    /// twice at once, or posted while the poller fetches it, only one fetch runs. The new record
+    /// is `Queued`, not `Resolving`: the job that downloads it writes the record only once the
+    /// download ends, so nothing would move it on from `Resolving`.
+    pub fn claim_faceit(
+        &self,
+        id: &str,
+        new_id: &str,
+        played_unix: Option<u64>,
+    ) -> (DemoRecord, bool) {
+        let mut records = self.lock();
+        if let Some(r) = self.answering(records.with_faceit(id)) {
+            return (r, false);
+        }
+        let rec = DemoRecord {
+            faceit_match_id: Some(id.to_owned()),
+            played_unix,
+            ..new_record(new_id, Source::Faceit)
+        };
+        records.insert(rec.clone());
+        self.changed(&records);
+        (rec, true)
+    }
+
+    /// Of `found`, the records of one match (one share code's, or one FACEIT match's), the one
+    /// that answers for it: not an error, and `Done` only while its pack is on disk; `Done`
+    /// first, then the oldest (then the least id, so the answer does not depend on the order).
+    fn answering<'a>(&self, found: impl Iterator<Item = &'a DemoRecord>) -> Option<DemoRecord> {
         let packed = |r: &DemoRecord| {
             r.sha256
                 .as_deref()
                 .is_some_and(|sha| self.pack_path(sha).is_file())
         };
-        records
-            .with_code(&code)
+        found
             .filter(|r| match r.status {
                 Status::Error => false,
                 Status::Done => packed(r),
@@ -437,6 +540,29 @@ impl Store {
     /// server's own work. What answers a client is [`Store::get_saved`].
     pub fn get(&self, id: &str) -> Option<DemoRecord> {
         self.lock().get(id).cloned()
+    }
+
+    /// Whether record `id` is done, so its replay can be opened: false for one forgotten, or
+    /// not finished, or failed (a pack evicted makes its record fail).
+    pub fn is_done(&self, id: &str) -> bool {
+        self.lock()
+            .get(id)
+            .is_some_and(|r| r.status == Status::Done)
+    }
+
+    /// Where the Game Coordinator's match info for Valve match `match_id` is kept.
+    pub fn gc_path(&self, match_id: u64) -> PathBuf {
+        self.data_dir.join("gc").join(format!("{match_id}.json"))
+    }
+
+    /// The data directory (`Config::data_dir`).
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
+    /// Every record, as it is in memory ([`Store::get`]).
+    pub fn records(&self) -> Vec<DemoRecord> {
+        self.lock().by_id.values().map(|e| e.rec.clone()).collect()
     }
 
     /// The record for `id` once its latest change is on disk (or writing it failed, which is
@@ -471,6 +597,19 @@ impl Store {
         self.data_dir
             .join("packs")
             .join(format!("{sha}{PACK_SUFFIX}"))
+    }
+
+    /// Where the original demo of `sha` is kept, zstd-compressed ([`crate::originals`]): the
+    /// data every later re-parse starts from.
+    pub fn original_path(&self, sha: &str) -> PathBuf {
+        self.data_dir
+            .join("originals")
+            .join(format!("{sha}.dem.zst"))
+    }
+
+    /// Whether the original demo of `sha` is kept.
+    pub fn has_original(&self, sha: &str) -> bool {
+        self.original_path(sha).is_file()
     }
 
     /// Every match summary, by sha. Whoever writes a summary to
@@ -1045,7 +1184,7 @@ fn check_version(
 
 /// Renames the file at `path` to `<path>.corrupt-<unix time>` (`-2`, `-3`… after it should
 /// that name be taken) and returns the new path.
-fn set_aside(path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn set_aside(path: &Path) -> io::Result<PathBuf> {
     let now = unix_now();
     let aside = (1u32..)
         .map(|n| {
@@ -1064,7 +1203,7 @@ fn set_aside(path: &Path) -> io::Result<PathBuf> {
 }
 
 /// A `Queued` record for `id`, created now.
-fn new_record(id: &str, source: Source) -> DemoRecord {
+pub(crate) fn new_record(id: &str, source: Source) -> DemoRecord {
     DemoRecord {
         id: id.to_owned(),
         sha256: None,
@@ -1078,6 +1217,10 @@ fn new_record(id: &str, source: Source) -> DemoRecord {
         sharecode: None,
         played_unix: None,
         failed_unix: None,
+        event: None,
+        teams: None,
+        gc_game_type: None,
+        faceit_match_id: None,
     }
 }
 
@@ -1109,6 +1252,10 @@ fn restarted(source: Source) -> &'static str {
         Source::Sharecode => {
             "the server restarted before this demo was processed; paste its share code again"
         }
+        Source::Faceit => {
+            "the server restarted before this demo was processed; paste its FACEIT match link again"
+        }
+        Source::Tracked | Source::Import => "the server restarted before this demo was processed",
     }
 }
 
@@ -1543,23 +1690,7 @@ mod tests {
                 .map(|r| r.id.clone())
         };
         let check = |store: &Store| {
-            {
-                let records = store.lock();
-                let mut rebuilt: HashMap<String, BTreeSet<String>> = HashMap::new();
-                for r in records.values() {
-                    if let Some(c) = r.sharecode.clone().filter(|_| r.status != Status::Error) {
-                        rebuilt.entry(c).or_default().insert(r.id.clone());
-                    }
-                }
-                assert_eq!(records.by_code, rebuilt);
-                let mut by_sha: HashMap<String, BTreeSet<String>> = HashMap::new();
-                for r in records.values() {
-                    if let Some(sha) = r.sha256.clone() {
-                        by_sha.entry(sha).or_default().insert(r.id.clone());
-                    }
-                }
-                assert_eq!(records.by_sha, by_sha);
-            }
+            assert_indexes_rebuilt(store);
             for n in 1..=4 {
                 assert_eq!(
                     store.find_match(&code(n)).map(|r| r.id),
@@ -1635,6 +1766,186 @@ mod tests {
         drop(store);
         let reopened = Store::open(&cfg).unwrap();
         check(&reopened);
+    }
+
+    /// The store's indexes hold what a rebuild from its records would: the share codes and the
+    /// FACEIT match ids of the records not in error, and every record's sha.
+    fn assert_indexes_rebuilt(store: &Store) {
+        let records = store.lock();
+        let mut by_code: HashMap<String, BTreeSet<String>> = HashMap::new();
+        let mut by_faceit: HashMap<String, BTreeSet<String>> = HashMap::new();
+        let mut by_sha: HashMap<String, BTreeSet<String>> = HashMap::new();
+        for r in records.values() {
+            let usable = r.status != Status::Error;
+            for (index, key) in [
+                (&mut by_code, r.sharecode.clone().filter(|_| usable)),
+                (&mut by_faceit, r.faceit_match_id.clone().filter(|_| usable)),
+                (&mut by_sha, r.sha256.clone()),
+            ] {
+                if let Some(key) = key {
+                    index.entry(key).or_default().insert(r.id.clone());
+                }
+            }
+        }
+        assert_eq!(records.by_code, by_code);
+        assert_eq!(records.by_faceit, by_faceit);
+        assert_eq!(records.by_sha, by_sha);
+    }
+
+    /// FACEIT room ids, as FACEIT writes them.
+    const FACEIT_A: &str = "1-0e5a6c4f-1b2d-4c3e-9f8a-7b6c5d4e3f21";
+    const FACEIT_B: &str = "1-9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a";
+
+    /// Of two claims of one FACEIT match, the first makes a `Queued` FACEIT record with the
+    /// match id and when it was played, and the second gets that record back, so a match posted
+    /// twice (or posted while the poller fetches it) is fetched once. Valve's ids stay Valve's.
+    /// A done record answers while its pack is there, as a share code's does.
+    #[test]
+    fn a_faceit_match_is_claimed_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&config(dir.path())).unwrap();
+        assert_eq!(store.find_faceit(FACEIT_A), None);
+        let (r, created) =
+            store.claim_faceit(FACEIT_A, "aaaaaaaaaaaaaaaaaaaaaa", Some(1_761_000_000));
+        assert!(created);
+        assert_eq!(
+            (
+                r.id.as_str(),
+                r.status,
+                r.source,
+                r.faceit_match_id.as_deref(),
+                r.played_unix
+            ),
+            (
+                "aaaaaaaaaaaaaaaaaaaaaa",
+                Status::Queued,
+                Source::Faceit,
+                Some(FACEIT_A),
+                Some(1_761_000_000)
+            )
+        );
+        assert_eq!((&r.match_id, &r.sharecode), (&None, &None));
+        assert_eq!(store.get(&r.id), Some(r.clone()));
+        assert_eq!(
+            store.claim_faceit(FACEIT_A, "bbbbbbbbbbbbbbbbbbbbbb", None),
+            (r.clone(), false)
+        );
+        assert_eq!(store.get("bbbbbbbbbbbbbbbbbbbbbb"), None);
+        assert_eq!(store.find_faceit(FACEIT_A), Some(r.clone()));
+        assert_eq!(store.find_faceit(FACEIT_B), None);
+        assert_indexes_rebuilt(&store);
+
+        let sha = "ab".repeat(32);
+        store.update(&r.id, |r| {
+            r.status = Status::Done;
+            r.sha256 = Some(sha.clone());
+        });
+        assert_eq!(
+            store.find_faceit(FACEIT_A),
+            None,
+            "done, but its pack is not there"
+        );
+        fs::write(store.pack_path(&sha), b"pack").unwrap();
+        assert_eq!(
+            store.find_faceit(FACEIT_A).map(|r| r.id),
+            Some(r.id.clone())
+        );
+        assert!(
+            !store
+                .claim_faceit(FACEIT_A, "cccccccccccccccccccccc", None)
+                .1
+        );
+        assert_indexes_rebuilt(&store);
+    }
+
+    /// The FACEIT index is rebuilt from `demos.json` when the store opens: a done FACEIT match is
+    /// found again by its id. One whose fetch the restart cut short is an error that says so and
+    /// leaves the index, so its match can be claimed again. The source is written `"faceit"`,
+    /// and a record with no FACEIT id is written without the field.
+    #[test]
+    fn faceit_records_are_reindexed_after_a_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = config(dir.path());
+        let store = Store::open(&cfg).unwrap();
+        let (done, _) = store.claim_faceit(FACEIT_A, "aaaaaaaaaaaaaaaaaaaaaa", Some(1));
+        let sha = "cd".repeat(32);
+        fs::write(store.pack_path(&sha), b"pack").unwrap();
+        store.update(&done.id, |r| {
+            r.status = Status::Done;
+            r.sha256 = Some(sha.clone());
+        });
+        let (cut, _) = store.claim_faceit(FACEIT_B, "bbbbbbbbbbbbbbbbbbbbbb", None);
+        store.update(&cut.id, |r| r.status = Status::Downloading);
+        store.create("cccccccccccccccccccccc");
+        assert_indexes_rebuilt(&store);
+        store.flush();
+        let saved: Vec<serde_json::Value> =
+            serde_json::from_slice(&fs::read(cfg.data_dir.join(INDEX)).unwrap()).unwrap();
+        let saved = |id: &str| saved.iter().find(|r| r["id"] == id).unwrap().clone();
+        assert_eq!(saved(&done.id)["source"], "faceit");
+        assert_eq!(saved(&done.id)["faceit_match_id"], FACEIT_A);
+        assert!(saved("cccccccccccccccccccccc")
+            .get("faceit_match_id")
+            .is_none());
+        drop(store);
+
+        let reopened = Store::open(&cfg).unwrap();
+        assert_indexes_rebuilt(&reopened);
+        assert_eq!(reopened.find_faceit(FACEIT_A), reopened.get(&done.id));
+        assert!(reopened.find_faceit(FACEIT_A).is_some());
+        let r = reopened.get(&cut.id).unwrap();
+        assert_eq!(r.status, Status::Error);
+        assert_eq!(r.error.as_deref(), Some(restarted(Source::Faceit)));
+        assert!(restarted(Source::Faceit).contains("FACEIT"));
+        assert_eq!(reopened.find_faceit(FACEIT_B), None);
+        let (again, created) = reopened.claim_faceit(FACEIT_B, "dddddddddddddddddddddd", None);
+        assert!(created);
+        assert_eq!(again.id, "dddddddddddddddddddddd");
+        assert_indexes_rebuilt(&reopened);
+    }
+
+    /// A FACEIT record in error (its fetch failed, or its pack was evicted) leaves the index, so
+    /// the next claim of its match makes a new record, as a share code's does; the failed one
+    /// stays for its TTL to say what went wrong, then is forgotten.
+    #[test]
+    fn an_error_record_leaves_the_faceit_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&config(dir.path())).unwrap();
+        let (first, _) = store.claim_faceit(FACEIT_A, "aaaaaaaaaaaaaaaaaaaaaa", Some(5));
+        store.update(&first.id, |r| {
+            r.status = Status::Error;
+            r.error = Some("the demo is gone".into());
+        });
+        assert_eq!(store.find_faceit(FACEIT_A), None);
+        assert_indexes_rebuilt(&store);
+        let (second, created) = store.claim_faceit(FACEIT_A, "bbbbbbbbbbbbbbbbbbbbbb", Some(5));
+        assert!(created);
+        assert_eq!(
+            (second.id.as_str(), second.status),
+            ("bbbbbbbbbbbbbbbbbbbbbb", Status::Queued)
+        );
+        assert_eq!(store.find_faceit(FACEIT_A), Some(second.clone()));
+        assert_eq!(store.get(&first.id).unwrap().status, Status::Error);
+        assert_indexes_rebuilt(&store);
+
+        let sha = "ef".repeat(32);
+        pack(&store, &sha, 100, 0);
+        store.update(&second.id, |r| {
+            r.status = Status::Done;
+            r.sha256 = Some(sha.clone());
+        });
+        assert!(store.find_faceit(FACEIT_A).is_some());
+        store.evict_lru(0).unwrap();
+        assert_eq!(store.get(&second.id).unwrap().status, Status::Error);
+        assert_eq!(store.find_faceit(FACEIT_A), None);
+        assert_indexes_rebuilt(&store);
+        assert_eq!(store.forget_failed_at(Duration::ZERO, unix_now() + 1), 2);
+        assert_indexes_rebuilt(&store);
+        assert!(
+            store
+                .claim_faceit(FACEIT_A, "cccccccccccccccccccccc", None)
+                .1
+        );
     }
 
     #[test]

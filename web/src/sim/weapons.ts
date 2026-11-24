@@ -19,52 +19,57 @@ const ALIASES: Readonly<Record<string, string>> = {
   cz75: 'cz75a',
 };
 
-/** The game's display names (lower case), as the track column carries them. */
-const DISPLAY: Readonly<Record<string, string>> = {
-  'ak-47': 'ak47',
-  m4a4: 'm4a4',
-  'm4a1-s': 'm4a1s',
-  awp: 'awp',
-  famas: 'famas',
-  'galil ar': 'galilar',
-  aug: 'aug',
-  'sg 553': 'sg556',
-  'ssg 08': 'ssg08',
-  'scar-20': 'scar20',
-  g3sg1: 'g3sg1',
-  mp9: 'mp9',
-  'mac-10': 'mac10',
-  mp7: 'mp7',
-  'mp5-sd': 'mp5sd',
-  'ump-45': 'ump45',
-  p90: 'p90',
-  'pp-bizon': 'bizon',
-  nova: 'nova',
-  xm1014: 'xm1014',
-  'mag-7': 'mag7',
-  'sawed-off': 'sawedoff',
-  m249: 'm249',
-  negev: 'negev',
-  'glock-18': 'glock',
-  'usp-s': 'usp',
-  p2000: 'hkp2000',
-  p250: 'p250',
-  'five-seven': 'fiveseven',
-  'tec-9': 'tec9',
-  'cz75-auto': 'cz75a',
-  'desert eagle': 'deagle',
-  'dual berettas': 'elite',
-  'r8 revolver': 'revolver',
-  'zeus x27': 'taser',
-  'high explosive grenade': 'hegrenade',
-  flashbang: 'flashbang',
-  'smoke grenade': 'smokegrenade',
-  molotov: 'molotov',
-  'incendiary grenade': 'incendiary',
-  'decoy grenade': 'decoy',
-  'c4 explosive': 'c4',
-  'medi-shot': 'healthshot',
+/** The game's display names, by model and clip name. */
+const NAMES: Readonly<Record<string, string>> = {
+  ak47: 'AK-47',
+  m4a4: 'M4A4',
+  m4a1s: 'M4A1-S',
+  awp: 'AWP',
+  famas: 'FAMAS',
+  galilar: 'Galil AR',
+  aug: 'AUG',
+  sg556: 'SG 553',
+  ssg08: 'SSG 08',
+  scar20: 'SCAR-20',
+  g3sg1: 'G3SG1',
+  mp9: 'MP9',
+  mac10: 'MAC-10',
+  mp7: 'MP7',
+  mp5sd: 'MP5-SD',
+  ump45: 'UMP-45',
+  p90: 'P90',
+  bizon: 'PP-Bizon',
+  nova: 'Nova',
+  xm1014: 'XM1014',
+  mag7: 'MAG-7',
+  sawedoff: 'Sawed-Off',
+  m249: 'M249',
+  negev: 'Negev',
+  glock: 'Glock-18',
+  usp: 'USP-S',
+  hkp2000: 'P2000',
+  p250: 'P250',
+  fiveseven: 'Five-SeveN',
+  tec9: 'Tec-9',
+  cz75a: 'CZ75-Auto',
+  deagle: 'Desert Eagle',
+  elite: 'Dual Berettas',
+  revolver: 'R8 Revolver',
+  taser: 'Zeus x27',
+  hegrenade: 'High Explosive Grenade',
+  flashbang: 'Flashbang',
+  smokegrenade: 'Smoke Grenade',
+  molotov: 'Molotov',
+  incendiary: 'Incendiary Grenade',
+  decoy: 'Decoy Grenade',
+  c4: 'C4 Explosive',
+  healthshot: 'Medi-Shot',
 };
+
+/** The display names (lower case), as the track column carries them → model name. */
+const DISPLAY: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(NAMES).map(([model, name]) => [name.toLowerCase(), model])
+);
 
 /** Any knife, by its internal or display name ("Karambit", "Shadow Daggers", "M9 Bayonet"). */
 const KNIFE = /knife|bayonet|karambit|daggers/;
@@ -104,6 +109,12 @@ export function normaliseWeapon(name: string): string {
   if (n.startsWith('weapon_')) n = n.slice(7);
   if (KNIFE.test(n)) return 'knife';
   return ALIASES[n] ?? n;
+}
+
+/** What the game calls a weapon in any pack spelling (`m4a1_silencer` → `M4A1-S`); null for
+ * one it has no single name for (a knife, `inferno`) or does not know. */
+export function weaponName(name: string): string | null {
+  return NAMES[normaliseWeapon(name)] ?? null;
 }
 
 /** The clip family a (normalised) weapon animates with. Unknown names count as rifles. */

@@ -317,8 +317,19 @@ export function ingestShareCode(
   return postDemo({ sharecode: code }, opts);
 }
 
+/**
+ * Asks the server for the demo of a FACEIT match, by FACEIT's id of it: the server asks FACEIT
+ * for the match and downloads its demo, or answers `cached` when the site already has the match.
+ */
+export function ingestFaceitMatch(
+  matchId: string,
+  opts: RequestOptions = {}
+): Promise<UploadResult> {
+  return postDemo({ faceitMatch: matchId }, opts);
+}
+
 async function postDemo(
-  body: { url: string } | { sharecode: string },
+  body: { url: string } | { sharecode: string } | { faceitMatch: string },
   { fetchFn = fetch, signal }: RequestOptions
 ): Promise<UploadResult> {
   const res = await fetchFn('/api/demos', {

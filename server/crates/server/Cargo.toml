@@ -21,13 +21,17 @@ tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process"
 url = "2"
 bzip2 = "0.6"
 flate2 = "1"
+zstd = "0.13"
 # HTTP API, job runner and store.
 axum = "0.8"
 http-body-util = "0.1"
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 tokio-util = { version = "0.7", features = ["io"] }
 serde = { version = "1", features = ["derive"] }
+chacha20poly1305 = "0.10"
+md-5 = "0.10"
 sha2 = "0.10"
+hmac = "0.12"
 bs58 = "0.5"
 # The version the vendored parser already pulls in.
 rand = "0.8"
@@ -40,12 +44,16 @@ tiny-skia = { version = "0.11", features = ["png-format"] }
 ab_glyph = "0.2"
 # The preview card as a JPEG: a screenshot is a tenth of the size it is as a PNG.
 jpeg-encoder = "0.6"
+# Players' avatars on their cards: Steam serves them as JPEGs.
+jpeg-decoder = "0.3"
 
 [dev-dependencies]
 futures-util = "0.3"
-# Reading the preview card back in the page tests.
-jpeg-decoder = "0.3"
+# Parses the Atom feeds in the tests.
+roxmltree = "0.20"
 tempfile = "3"
+# Paused time in the Steam gate's tests.
+tokio = { version = "1", features = ["test-util"] }
 tower = { version = "0.5", features = ["util"] }
 
 [[bin]]

@@ -3,7 +3,8 @@
 //
 // Who POV shows is planned in `sim/follow` (`followLegs`), which the store reads too. While the
 // director drives POV, the store hands it the director's pick as `follow`, never pinned. Free
-// starts from the view drawn last and nothing but its keys move it.
+// starts from the view drawn last, stepped back and up out of the head when that was a player's
+// eyes (`FREE_FROM_POV`), and nothing but its keys move it.
 
 import * as THREE from 'three';
 import { eyePoint, viewDir } from '../geo/coords';
@@ -41,6 +42,12 @@ export const POV_FOV = 73.74;
  * before it (paused), so the time since the last draw is not how long the key has been down.
  */
 export const FLY_START_S = 1 / 60;
+/**
+ * Entering Free from a player's eyes, the camera starts this far behind them and this far above,
+ * in metres, looking where they looked: over their shoulder, not inside their head, which Free
+ * draws.
+ */
+export const FREE_FROM_POV = Object.freeze({ back: 1.5, up: 0.5 });
 /** Legs kept: a round's worth of players and a few more. */
 const LEGS_CACHE = 32;
 /** Bounds for an empty scene (no map loaded, or none found): 100 m around the origin. */
@@ -187,7 +194,12 @@ export class Cameras {
     if (ctx.pack !== this.pack) this.setPack(ctx.pack);
     if (this.mode === 'free') {
       const entered = this.lastMode !== 'free';
-      if (entered) this.fly.takeFrom(this.last);
+      // From a player's eyes, back and up out of their head.
+      const fromEyes =
+        this.lastMode === 'pov' &&
+        this.last === this.pov &&
+        this.shown !== null;
+      if (entered && this.fly.takeFrom(this.last) && fromEyes) this.stepBack();
       const moved = this.fly.update(
         entered || !this.flying ? Math.min(dt, FLY_START_S) : dt
       );
@@ -200,6 +212,15 @@ export class Cameras {
 
   dispose(): void {
     this.fly.dispose();
+  }
+
+  /** Moves the free camera `FREE_FROM_POV` behind and above where it stands, facing as it was. */
+  private stepBack(): void {
+    const free = this.free;
+    this.fwd.set(0, 0, -1).applyQuaternion(free.quaternion);
+    free.position.addScaledVector(this.fwd, -FREE_FROM_POV.back);
+    free.position.y += FREE_FROM_POV.up;
+    free.updateMatrixWorld();
   }
 
   /**

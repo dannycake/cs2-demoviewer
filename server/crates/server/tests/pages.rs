@@ -4,153 +4,19 @@
 //! data dir with a stub job queue; matches are put straight into the store.
 
 use std::path::Path;
-use std::sync::Arc;
 use std::time::Duration;
 
-use axum::body::{to_bytes, Body};
-use axum::http::{header, HeaderMap, Request, StatusCode};
+use axum::http::{header, StatusCode};
 use axum::Router;
-use demoviewer_server::app::build_app;
 use demoviewer_server::config::{Config, Site};
-use demoviewer_server::jobs::Jobs;
-use demoviewer_server::matches::{MatchSummary, SummaryPlayer};
-use demoviewer_server::ratelimit::RateLimiter;
+use demoviewer_server::matches::MatchSummary;
+use demoviewer_server::pages::{HOME_DESCRIPTION, HOME_TITLE};
+use demoviewer_server::preview;
 use demoviewer_server::store::{Status, Store};
-use tempfile::TempDir;
 use tiny_skia::{Color, Pixmap};
-use tower::ServiceExt;
-use url::Url;
 
-/// The web app's page, shaped like the build's.
-const PAGE: &str = "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    \
-<title>cs.skunk.to</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-abc.js\"></script>\n  \
-</head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n";
-
-/// 2025-10-22 20:00 UTC and 2025-10-24 10:00 UTC.
-const PLAYED: u64 = 1_761_163_200;
-const CREATED: u64 = 1_761_300_000;
-
-const NAMES: [&str; 11] = [
-    "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliett",
-    "kilo",
-];
-
-struct Server {
-    dir: TempDir,
-    store: Arc<Store>,
-    app: Router,
-}
-
-/// A server with `index.html` in its web dir and `https://cs.skunk.to/` as its public URL.
-fn site(cfg: impl FnOnce(Config) -> Config) -> Server {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(dir.path().join("web")).unwrap();
-    std::fs::write(dir.path().join("web/index.html"), PAGE).unwrap();
-    let cfg = Arc::new(cfg(Config {
-        data_dir: dir.path().join("data"),
-        assets_dir: dir.path().join("assets"),
-        web_dir: dir.path().join("web"),
-        public_url: Some(Url::parse("https://cs.skunk.to/").unwrap()),
-        ..Config::default()
-    }));
-    let store = Arc::new(Store::open(&cfg).unwrap());
-    let (jobs, _rx) = Jobs::channel();
-    let limiter = Arc::new(RateLimiter::new(cfg.ingests_per_hour));
-    let app = build_app(cfg, store.clone(), jobs, limiter);
-    Server { dir, store, app }
-}
-
-/// Mirage 13–9 (the CTs won, the sides swapped after 12 rounds), played 2025-10-22, eleven
-/// players, the first with the most kills.
-fn summary(sha: &str) -> MatchSummary {
-    MatchSummary {
-        sha256: sha.into(),
-        map: "de_mirage".into(),
-        rounds: 22,
-        score_t: 9,
-        score_ct: 13,
-        duration_s: 2357,
-        server_name: "Valve Counter-Strike 2 eu_west Server".into(),
-        game_build: "14185".into(),
-        players: NAMES
-            .iter()
-            .enumerate()
-            .map(|(i, name)| SummaryPlayer {
-                steamid: (76_561_198_000_000_000u64 + i as u64).to_string(),
-                name: (*name).into(),
-                team: if i % 2 == 0 { 2 } else { 3 },
-                kills: 20 - i as u16,
-                deaths: 10,
-                assists: 3,
-                damage: 2200 - 100 * i as u32,
-                headshots: 5,
-            })
-            .collect(),
-        created_unix: CREATED,
-        played_unix: Some(PLAYED),
-        match_id: None,
-        round_winners: (0..22)
-            .map(|r| if matches!(r % 5, 1 | 3) { 2 } else { 3 })
-            .collect(),
-        swaps: vec![12],
-        version: demoviewer_server::matches::SUMMARY_VERSION,
-    }
-}
-
-fn sha(tag: u8) -> String {
-    format!("{tag:02x}").repeat(32)
-}
-
-/// A new demo id in `status` for the pack `sha`, whose summary (if any) is indexed.
-fn demo(store: &Store, status: Status, sha: &str, summary: Option<MatchSummary>) -> String {
-    let id = Store::new_id();
-    store.create(&id);
-    store.update(&id, |r| {
-        r.status = status;
-        r.sha256 = Some(sha.into());
-    });
-    if let Some(s) = summary {
-        store.matches().insert(s);
-    }
-    id
-}
-
-fn get(uri: &str) -> Request<Body> {
-    Request::get(uri).body(Body::empty()).unwrap()
-}
-
-async fn call(app: &Router, uri: &str) -> (StatusCode, HeaderMap, Vec<u8>) {
-    let res = app.clone().oneshot(get(uri)).await.unwrap();
-    let status = res.status();
-    let headers = res.headers().clone();
-    let body = to_bytes(res.into_body(), usize::MAX)
-        .await
-        .unwrap()
-        .to_vec();
-    (status, headers, body)
-}
-
-async fn page(app: &Router, uri: &str) -> String {
-    let (status, headers, body) = call(app, uri).await;
-    assert_eq!(status, StatusCode::OK, "{uri}");
-    assert!(
-        headers[header::CONTENT_TYPE]
-            .to_str()
-            .unwrap()
-            .starts_with("text/html"),
-        "{uri}: {headers:?}"
-    );
-    String::from_utf8(body).unwrap()
-}
-
-/// The `content` of the `<meta property=…>` or `<meta name=…>` called `key`.
-fn meta(html: &str, key: &str) -> Option<String> {
-    ["property", "name"].iter().find_map(|attr| {
-        let start = format!("<meta {attr}=\"{key}\" content=\"");
-        let at = html.find(&start)? + start.len();
-        Some(html[at..at + html[at..].find('"')?].to_owned())
-    })
-}
+mod common;
+use common::{call, demo, link_rel, meta, page, sha, site, summary, Server, PAGE};
 
 fn title(html: &str) -> &str {
     assert_eq!(html.matches("<title>").count(), 1, "{html}");
@@ -208,7 +74,7 @@ fn image(path: &Path, width: u32, height: u32, color: Color) {
 
 /// The description of [`summary`]: alpha has the most kills (20) and 2200 damage in 22 rounds.
 const DESCRIPTION: &str = "alpha led with 20 kills and 100 ADR · 22 rounds in 39 min · \
-                           Valve matchmaking, eu_west · 2025-10-22. Watch it in 3D.";
+                           Valve matchmaking, EU West · Oct 22, 2025. Watch this CS2 demo in 3D.";
 
 #[tokio::test]
 async fn a_done_matchs_page_has_its_title_and_preview_tags() {
@@ -218,14 +84,18 @@ async fn a_done_matchs_page_has_its_title_and_preview_tags() {
     assert_eq!(headers[header::CACHE_CONTROL], "no-cache");
     let html = page(&s.app, &format!("/d/{id}?round=3")).await;
 
-    assert_eq!(title(&html), "Mirage 13–9 · cs.skunk.to", "{html}");
+    assert_eq!(
+        title(&html),
+        "Mirage 13–9 · CS2 replay · skunk.club",
+        "{html}"
+    );
     let expect = [
-        ("og:site_name", "cs.skunk.to".to_owned()),
+        ("og:site_name", "skunk.club".to_owned()),
         ("og:type", "website".to_owned()),
         ("og:title", "Mirage 13–9".to_owned()),
         ("og:description", DESCRIPTION.to_owned()),
-        ("og:url", format!("https://cs.skunk.to/d/{id}")),
-        ("og:image", format!("https://cs.skunk.to/og/{id}.jpg")),
+        ("og:url", format!("https://skunk.club/d/{id}")),
+        ("og:image", format!("https://skunk.club/og/{id}.jpg")),
         ("og:image:type", "image/jpeg".to_owned()),
         ("og:image:width", "1200".to_owned()),
         ("og:image:height", "630".to_owned()),
@@ -236,9 +106,8 @@ async fn a_done_matchs_page_has_its_title_and_preview_tags() {
                 .to_owned(),
         ),
         ("twitter:card", "summary_large_image".to_owned()),
-        // The CTs won: the embed's edge is their blue.
-        ("theme-color", "#4da3ff".to_owned()),
-        ("robots", "noindex".to_owned()),
+        // The embed's edge is the site's crimson, whoever won.
+        ("theme-color", "#e4163a".to_owned()),
     ];
     for (key, value) in expect {
         assert_eq!(
@@ -253,7 +122,11 @@ async fn a_done_matchs_page_has_its_title_and_preview_tags() {
     assert!(
         html.contains("<script type=\"module\" crossorigin src=\"/assets/index-abc.js\"></script>")
     );
-    assert!(html.contains("<div id=\"root\"></div>"));
+    // The scoreboard just after the app's root, which stays empty for the app to mount in.
+    assert!(
+        html.contains("<div id=\"root\"></div><div id=\"pre\"><main class=\"pre\">"),
+        "{html}"
+    );
     assert!(html.starts_with("<!doctype html>"));
 }
 
@@ -279,11 +152,33 @@ async fn without_a_public_url_there_are_no_links_and_the_date_falls_back() {
     assert_eq!(meta(&html, "og:title").as_deref(), Some("Mirage 13–9"));
     assert_eq!(
         meta(&html, "og:description").as_deref(),
-        Some("22 rounds in 39 min · Valve matchmaking, eu_west · 2025-10-24. Watch it in 3D.")
+        Some("22 rounds in 39 min · Valve matchmaking, EU West · Oct 24, 2025. Watch this CS2 demo in 3D.")
     );
     assert_eq!(meta(&html, "og:image"), None, "{html}");
     assert_eq!(meta(&html, "og:url"), None, "{html}");
-    assert_eq!(meta(&html, "robots").as_deref(), Some("noindex"));
+    assert_eq!(meta(&html, "robots"), None, "{html}");
+    assert_eq!(link_rel(&html, "canonical"), None, "{html}");
+}
+
+/// A tournament's match names its event as the site does ("IEM Cologne Major 2026", never its
+/// slug), in place of the server it was played on.
+#[tokio::test]
+async fn a_tournaments_match_names_its_event() {
+    let s = site(|c| c);
+    let m = MatchSummary {
+        event: Some("iem_cologne_major_2026".into()),
+        server_name: "HLTV // IEM Cologne".into(),
+        ..summary(&sha(9))
+    };
+    let id = demo(&s.store, Status::Done, &sha(9), Some(m));
+    let html = page(&s.app, &format!("/d/{id}")).await;
+    assert_eq!(
+        meta(&html, "og:description").as_deref(),
+        Some(
+            "alpha led with 20 kills and 100 ADR · 22 rounds in 39 min · IEM Cologne Major 2026 \
+             · Oct 22, 2025. Watch this CS2 demo in 3D."
+        )
+    );
 }
 
 #[tokio::test]
@@ -300,7 +195,7 @@ async fn names_and_maps_are_escaped() {
 
     assert_eq!(
         title(&html),
-        "&lt;b&gt;&quot;x&#39;&amp; 13–9 · cs.skunk.to",
+        "&lt;b&gt;&quot;x&#39;&amp; 13–9 · CS2 replay · skunk.club",
         "{html}"
     );
     assert_eq!(
@@ -311,16 +206,17 @@ async fn names_and_maps_are_escaped() {
         meta(&html, "og:description").as_deref(),
         Some(
             "&lt;script&gt;&quot;&amp;x led with 19 kills and 95 ADR · 22 rounds in 39 min · \
-             &lt;i&gt;lan&lt;/i&gt; · 2025-10-22. Watch it in 3D."
+             &lt;i&gt;lan&lt;/i&gt; · Oct 22, 2025. Watch this CS2 demo in 3D."
         )
     );
     assert!(!html.contains("<script>"), "{html}");
     assert!(!html.contains("<b>"), "{html}");
 }
 
-/// An unknown, malformed, unfinished or failed id, or a done one with no summary (a pack
-/// parsed before summaries existed), gets the app's page with its own title and no preview
-/// tags; still `noindex`. Player pages do not exist: `/p/…` is the app's page as it is.
+/// An unknown, malformed or failed id is a 404, and an unfinished one or a done one with no
+/// summary (a pack parsed before summaries existed) a 200: either way the app's page with its
+/// own title and no preview tags, `noindex`. Player pages do not exist: `/p/…` is the app's
+/// page as it is.
 #[tokio::test]
 async fn ids_without_a_match_get_the_plain_page() {
     let s = site(|c| c);
@@ -328,19 +224,22 @@ async fn ids_without_a_match_get_the_plain_page() {
     let queued = demo(&s.store, Status::Queued, &sha(4), None);
     let failed = demo(&s.store, Status::Error, &sha(5), Some(summary(&sha(5))));
     let no_summary = demo(&s.store, Status::Done, &sha(6), None);
-    for path in [
-        format!("/d/{unknown}"),
-        "/d/not-an-id".to_owned(),
-        "/d/%FF%FE".to_owned(),
-        format!("/d/{queued}"),
-        format!("/d/{failed}"),
-        format!("/d/{no_summary}"),
+    for (path, want) in [
+        (format!("/d/{unknown}"), StatusCode::NOT_FOUND),
+        ("/d/not-an-id".to_owned(), StatusCode::NOT_FOUND),
+        ("/d/%FF%FE".to_owned(), StatusCode::NOT_FOUND),
+        (format!("/d/{queued}"), StatusCode::OK),
+        (format!("/d/{failed}"), StatusCode::NOT_FOUND),
+        (format!("/d/{no_summary}"), StatusCode::OK),
     ] {
-        let html = page(&s.app, &path).await;
-        assert_eq!(title(&html), "cs.skunk.to", "{path}");
+        let (status, _, body) = call(&s.app, &path).await;
+        assert_eq!(status, want, "{path}");
+        let html = String::from_utf8(body).unwrap();
+        assert_eq!(title(&html), "skunk.club", "{path}");
         assert!(!html.contains("og:"), "{path}: {html}");
         assert!(!html.contains("twitter:"), "{path}: {html}");
         assert_eq!(meta(&html, "robots").as_deref(), Some("noindex"), "{path}");
+        assert_eq!(link_rel(&html, "canonical"), None, "{path}");
         assert_eq!(
             html.replace("    <meta name=\"robots\" content=\"noindex\">\n", ""),
             PAGE,
@@ -349,11 +248,27 @@ async fn ids_without_a_match_get_the_plain_page() {
     }
     let id = demo(&s.store, Status::Done, &sha(7), Some(summary(&sha(7))));
     let (status, _, body) = call(&s.app, "/p/76561198000000000").await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, PAGE.as_bytes());
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let plain = |body: Vec<u8>| {
+        String::from_utf8(body)
+            .unwrap()
+            .replace("    <meta name=\"robots\" content=\"noindex\">\n", "")
+    };
+    // Paths no route owns get the not-found page: the app's, with its own title and description.
+    let not_found = PAGE
+        .replace(
+            "<title>skunk.club</title>",
+            "<title>Not found · skunk.club</title>",
+        )
+        .replace(
+            "  </head>",
+            "    <meta name=\"description\" content=\"This page does not exist.\">\n  </head>",
+        );
+    assert_eq!(plain(body), not_found);
     // A path below a match is not its page.
-    let (_, _, body) = call(&s.app, &format!("/d/{id}/x")).await;
-    assert_eq!(body, PAGE.as_bytes());
+    let (status, _, body) = call(&s.app, &format!("/d/{id}/x")).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(plain(body), not_found);
 }
 
 /// `DEMOVIEWER_PREVIEWS=off`: the page keeps its title, carries no preview tags, and there is
@@ -366,14 +281,33 @@ async fn previews_off_means_no_preview_tags_and_no_image() {
     });
     let id = demo(&s.store, Status::Done, &sha(8), Some(summary(&sha(8))));
     let html = page(&s.app, &format!("/d/{id}")).await;
-    assert_eq!(title(&html), "Mirage 13–9 · cs.skunk.to");
+    assert_eq!(title(&html), "Mirage 13–9 · CS2 replay · skunk.club");
     assert!(!html.contains("og:"), "{html}");
     assert!(!html.contains("twitter:"), "{html}");
-    assert_eq!(meta(&html, "robots").as_deref(), Some("noindex"));
+    assert_eq!(meta(&html, "robots"), None, "a done match is indexable");
     for ext in ["jpg", "png"] {
         let (status, _, _) = call(&s.app, &format!("/og/{id}.{ext}")).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{ext}");
     }
+}
+
+/// A card kept from before the card's look last changed (the day as the site writes it,
+/// Valve's region in words) is drawn again, in its place; the new one is kept.
+#[tokio::test]
+async fn a_card_drawn_in_an_older_look_is_drawn_again() {
+    let s = site(|c| c);
+    let id = demo(&s.store, Status::Done, &sha(8), Some(summary(&sha(8))));
+    let kept = s.dir.path().join(format!("data/og/{}.jpg", sha(8)));
+    std::fs::create_dir_all(kept.parent().unwrap()).unwrap();
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    std::fs::write(&kept, b"a card drawn as 2026-10-24").unwrap();
+    let drawn = preview(&s.app, &id).await;
+    assert_ne!(drawn, b"a card drawn as 2026-10-24");
+    assert!(drawn
+        .windows(preview::MATCH_DESIGN.len())
+        .any(|w| w == preview::MATCH_DESIGN));
+    assert_eq!(std::fs::read(&kept).unwrap(), drawn, "kept in its place");
+    assert_eq!(preview(&s.app, &id).await, drawn);
 }
 
 /// The image is drawn once per pack and kept in `og/<sha>.jpg`: a second request, and a
@@ -513,7 +447,7 @@ async fn names_in_any_script_render_without_panicking() {
     m.players[2].name = "🔥🔥 игрок".into();
     let id = demo(&s.store, Status::Done, &sha(15), Some(m));
     let html = page(&s.app, &format!("/d/{id}")).await;
-    assert_eq!(title(&html), "東京🙂 13–9 · cs.skunk.to");
+    assert_eq!(title(&html), "東京🙂 13–9 · CS2 replay · skunk.club");
     let description = meta(&html, "og:description").unwrap();
     assert!(
         description.starts_with("日本語の名前 led with 20 kills"),
@@ -556,4 +490,107 @@ async fn preview_paths_without_a_done_match_are_404() {
             .count(),
         0
     );
+}
+
+/// The site's own pages preview in Discord as the site: their title and what they are for, the
+/// homepage's still (when the assets have it) as a large image, and the site's crimson as the
+/// embed's edge. They stay indexable, and the rest of the page is the app's.
+#[tokio::test]
+async fn the_site_pages_preview_as_the_site() {
+    let s = site(|c| c);
+    std::fs::create_dir_all(s.dir.path().join("assets/site/home")).unwrap();
+    std::fs::write(s.dir.path().join("assets/site/home/poster.jpg"), b"jpeg").unwrap();
+    for (uri, url, og_title) in [
+        ("/", "https://skunk.club/", HOME_TITLE),
+        (
+            "/track?signin=failed",
+            "https://skunk.club/track",
+            "Track your matches",
+        ),
+        ("/legal", "https://skunk.club/legal", "Contact"),
+    ] {
+        let (_, headers, _) = call(&s.app, uri).await;
+        assert_eq!(headers[header::CACHE_CONTROL], "no-cache", "{uri}");
+        let html = page(&s.app, uri).await;
+        for (key, value) in [
+            ("og:site_name", "skunk.club"),
+            ("og:type", "website"),
+            ("og:title", og_title),
+            ("og:url", url),
+            ("og:image", "https://skunk.club/site/home/poster.jpg"),
+            ("twitter:card", "summary_large_image"),
+            ("theme-color", "#e4163a"),
+        ] {
+            assert_eq!(
+                meta(&html, key).as_deref(),
+                Some(value),
+                "{uri} {key}: {html}"
+            );
+        }
+        assert!(
+            meta(&html, "og:description").is_some_and(|d| !d.is_empty()),
+            "{uri}"
+        );
+        // Everything but the sign-in flow is indexable.
+        assert_eq!(
+            meta(&html, "robots").is_some(),
+            uri.starts_with("/track"),
+            "{uri}"
+        );
+        assert!(html.contains("<div id=\"root\"></div>"), "{uri}");
+    }
+    let home = page(&s.app, "/").await;
+    assert_eq!(
+        meta(&home, "og:description").as_deref(),
+        Some(HOME_DESCRIPTION.replace('\'', "&#39;").as_str())
+    );
+}
+
+/// Every page has a description for search engines and link previews that read no OpenGraph
+/// (`<meta name="description">`): the one it previews with, in place of the app's own (the
+/// homepage's words), which a page with nothing of its own keeps. Never two.
+#[tokio::test]
+async fn every_page_has_one_description() {
+    let s = site(|c| c);
+    let default = "Watch CS2 demos in 3D.";
+    std::fs::write(
+        s.dir.path().join("web/index.html"),
+        PAGE.replace(
+            "<title>",
+            &format!("<meta name=\"description\" content=\"{default}\" />\n    <title>"),
+        ),
+    )
+    .unwrap();
+    let id = demo(&s.store, Status::Done, &sha(1), Some(summary(&sha(1))));
+    let legal = "Legal requests, privacy, data and takedowns for skunk.club: contact@skunk.legal.";
+    for (uri, want) in [
+        (format!("/d/{id}"), DESCRIPTION),
+        ("/legal".to_owned(), legal),
+        (format!("/d/{}", Store::new_id()), default),
+        ("/profiles/76561198000000099".to_owned(), default),
+        ("/some/route".to_owned(), "This page does not exist."),
+    ] {
+        let (status, _, body) = call(&s.app, &uri).await;
+        if uri == "/some/route" {
+            assert_eq!(status, StatusCode::NOT_FOUND);
+        }
+        let html = String::from_utf8(body).unwrap();
+        assert_eq!(
+            html.matches("<meta name=\"description\"").count(),
+            1,
+            "{uri}: {html}"
+        );
+        assert_eq!(meta(&html, "description").as_deref(), Some(want), "{uri}");
+    }
+}
+
+/// Without the homepage's still in the assets the site pages have no image, and say so to
+/// Discord with the small card.
+#[tokio::test]
+async fn without_the_still_the_site_pages_have_no_image() {
+    let s = site(|c| c);
+    let html = page(&s.app, "/").await;
+    assert_eq!(meta(&html, "og:image"), None);
+    assert_eq!(meta(&html, "twitter:card").as_deref(), Some("summary"));
+    assert_eq!(meta(&html, "theme-color").as_deref(), Some("#e4163a"));
 }

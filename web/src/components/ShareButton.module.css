@@ -8,9 +8,14 @@
 }
 
 /* Scoped under .share, so it outranks the bar's button colours whatever the CSS order. */
-.share .copied,
-.share .copied:hover:not(:disabled) {
+.share .copied {
   color: var(--brand);
+}
+
+@media (hover: hover) {
+  .share .copied:hover:not(:disabled) {
+    color: var(--brand);
+  }
 }
 
 .label {
@@ -38,17 +43,15 @@
   padding: 0.9em 1em;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--surface-1);
+  background: var(--panel-strong);
   box-shadow: var(--shadow-overlay);
-  font-size: calc(var(--hud-size, 14px) * 0.8);
+  font-size: max(var(--fs-label), calc(var(--hud-size, 14px) * 0.8));
   color: var(--text);
 }
 
 .title {
   color: var(--text-mute);
   font-size: var(--fs-label);
-  letter-spacing: var(--track-label);
-  text-transform: lowercase;
 }
 
 .field {

@@ -54,6 +54,7 @@ import { ArmsCache, type ViewmodelManifest } from './arms';
 import { Viewmodel, viewmodelToScene, type ViewmodelFrame } from './viewmodel';
 import { WeaponCache, weaponModelName, type WeaponManifest } from './weapons';
 import { PostStack } from './post';
+import { Prop, type PropPose } from './prop';
 import { SkyAndFog } from './sky';
 import {
   LIVE_SUN_LOW_SHADOWS,
@@ -676,6 +677,16 @@ export class Scene {
   }
 
   /**
+   * Hears the world file's bytes as they arrive, and its size by the map's manifest (null when
+   * it does not say), for a progress bar; null stops it.
+   */
+  set onWorldBytes(
+    fn: ((loaded: number, total: number | null) => void) | null
+  ) {
+    this.mapAssets.onWorldBytes = fn;
+  }
+
+  /**
    * Makes the rig pool for this match of the players' models, at the scene's phone tier
    * (`PlayerModels.load`: of overlapping calls only the last one has an effect).
    */
@@ -771,6 +782,43 @@ export class Scene {
   /** Lets go of every fly key (the window lost focus, or the page was hidden). */
   clearFlyKeys(): void {
     this.cameras.fly.clear();
+  }
+
+  /** The GLB prop at `url` (`Prop`) put in the scene, replacing any before: the homepage
+   * video's chicken (`tools/home-video.mjs`). */
+  async loadProp(
+    url: string
+  ): Promise<{ clips: string[]; height: number; durations: number[] }> {
+    const prop = await Prop.load(url, this.playerLook());
+    if (this.disposed) {
+      prop.dispose();
+      return { clips: [], height: 0, durations: [] };
+    }
+    this.prop?.dispose();
+    this.prop = prop;
+    this.scene.add(prop.root);
+    this.invalidate();
+    return {
+      clips: prop.clips,
+      height: prop.height,
+      durations: prop.durations,
+    };
+  }
+
+  /** Poses the prop (`Prop.pose`), lit by the map's light grid; null hides it. */
+  poseProp(p: PropPose | null): void {
+    if (!this.prop) return;
+    this.prop.root.visible = p !== null;
+    if (p) this.prop.pose(p, this.mapAssets.baked?.lightGrid ?? null);
+    this.invalidate();
+  }
+
+  private prop: Prop | null = null;
+
+  /** The post stack's depth of field (`PostStack.setDof`); null turns it off. */
+  setDof(o: { focus: number; scale: number; max: number } | null): void {
+    this.post.setDof(o);
+    this.invalidate();
   }
 
   /**
@@ -1183,6 +1231,9 @@ export class Scene {
         : this.cameras.follow;
     to.hideShown = this.cameras.mode !== 'free';
     to.worldPerPixel = worldPerPixel;
+    to.camera = camera;
+    to.width = this.width;
+    to.height = this.height;
     this.nameTags.update(this.states, f.pack.header, f.round, to);
   }
 

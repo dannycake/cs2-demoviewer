@@ -20,6 +20,7 @@ use axum::Router;
 use demoviewer_server::admission::FETCHES_PER_CLIENT;
 use demoviewer_server::app::build_app;
 use demoviewer_server::config::Config;
+use demoviewer_server::faceit::FaceitKey;
 use demoviewer_server::gcbot::{ResolveError, Resolved, ShareCodes, MAX_WAITING};
 use demoviewer_server::jobs::{self, Hooks, Job, Jobs};
 use demoviewer_server::matches::{summarize, MatchSummary};
@@ -739,11 +740,11 @@ async fn url_ingest_checks_the_url_then_enqueues() {
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(
-        v["error"]
-            .as_str()
-            .unwrap()
-            .contains("only Valve replay links"),
+    let error = v["error"].as_str().unwrap();
+    assert!(error.contains("only Valve replay links"), "{v}");
+    assert_eq!(
+        error.contains("FACEIT demo links"),
+        !demoviewer_server::ingest::FACEIT_DEMO_HOSTS.is_empty(),
         "{v}"
     );
     let (status, v) = call_json(
@@ -944,6 +945,14 @@ async fn pack_is_409_until_done_then_served_with_cache_headers() {
         headers[header::CONTENT_LENGTH],
         packed.len().to_string().as_str()
     );
+    // The size the browser inflates it to, for the viewer's progress bar.
+    let mut inflated = Vec::new();
+    std::io::Read::read_to_end(
+        &mut flate2::read::GzDecoder::new(&packed[..]),
+        &mut inflated,
+    )
+    .unwrap();
+    assert_eq!(headers["x-pack-size"], inflated.len().to_string().as_str());
     assert_eq!(body, packed);
 }
 
@@ -1011,18 +1020,17 @@ async fn serving_a_pack_keeps_it_from_eviction() {
     assert!(v["error"].as_str().unwrap().contains("expired"), "{v}");
 }
 
-/// Link only: the site lists nothing, and tells the web app whether it takes share codes (not
+/// No list of matches (a match is reached by its link or a player's profile, see
+/// `tests/players.rs`), and the site tells the web app whether it takes share codes (not
 /// without a share-code service).
 #[tokio::test]
-async fn the_site_says_what_it_offers_and_lists_nothing() {
+async fn the_site_says_what_it_offers_and_lists_no_matches() {
     let (h, _rx) = stub(40 * KB as u64);
     let (status, v) = call_json(&h.app, get("/api/site")).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(v, json!({"sharecodes": false}));
-    for path in ["/api/matches/recent", "/api/players/76561198000000001"] {
-        let (status, _) = call_json(&h.app, get(path)).await;
-        assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
-    }
+    let (status, _) = call_json(&h.app, get("/api/matches/recent")).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 /// A done demo's status carries its match summary, without the sha; so does a second upload of
@@ -1123,7 +1131,7 @@ async fn match_summaries_are_read_back_at_startup() {
                 sha256: sha.clone(),
                 created_unix: 1_761_000_000,
                 match_id: Some("3712345678901234567".into()),
-                ..summarize(&tiny_match("de_ancient"))
+                ..summarize(&tiny_match("de_ancient"), false)
             };
             std::fs::write(
                 earlier.summary_path(&sha),
@@ -1185,9 +1193,9 @@ async fn static_files_and_assets() {
     let (status, _, body) = call(&h.app, get("/js/app.js")).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, b"console.log(1)");
-    // Client-side routes get the app.
+    // Client-side routes get the app; a match the server does not hold gets it with a 404.
     let (status, _, body) = call(&h.app, get("/d/4vJ9JU1bJJE96FWSJKvHsm")).await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body, b"<title>demoviewer</title>");
     // Unknown API paths stay JSON 404s.
     let (status, v) = call_json(&h.app, get("/api/nope")).await;
@@ -1637,9 +1645,10 @@ async fn the_page_is_revalidated_and_hashed_bundles_are_kept_for_a_year() {
     std::fs::create_dir_all(web.join("assets")).unwrap();
     std::fs::write(web.join("index.html"), b"<title>demoviewer</title>").unwrap();
     std::fs::write(web.join("assets/index-abc123.js"), b"console.log(1)").unwrap();
+    // A page, also; without `no-transform`, so Cloudflare may inject its analytics beacon.
     for (uri, want) in [
         ("/", "no-cache"),
-        ("/d/someDemo", "no-cache"),
+        ("/legal", "no-cache"),
         (
             "/assets/index-abc123.js",
             "public, max-age=31536000, immutable",
@@ -1675,12 +1684,48 @@ async fn a_bundle_missing_from_this_build_is_a_404_and_the_page_is_never_immutab
         assert_eq!(headers.get(header::CACHE_CONTROL), None, "{uri}");
         assert!(!body.starts_with(b"<title>"), "{uri}");
     }
-    // Every path that falls back to the page gets the page's header, whatever it looks like.
+    // Every path that is no file gets the page (the 404 page, for the app to draw its "not
+    // found" view) with the page's header, whatever it looks like.
     for uri in ["/", "/some/route", "/assets.js", "/d/someDemo/assets/x.js"] {
         let (status, headers, body) = call(&h.app, get(uri)).await;
-        assert_eq!(status, StatusCode::OK, "{uri}");
+        let want = if uri == "/" {
+            StatusCode::OK
+        } else {
+            StatusCode::NOT_FOUND
+        };
+        assert_eq!(status, want, "{uri}");
         assert_eq!(body, b"<title>demoviewer</title>", "{uri}");
         assert_eq!(headers[header::CACHE_CONTROL], "no-cache", "{uri}");
+    }
+}
+
+/// The site's fonts (`/fonts/*`, the web build's `public/fonts`) are kept for a year: a font
+/// that changes gets a new file name. Without it every page load asked again for each one, a
+/// round trip through the tunnel before the text could take its face. A font this build does
+/// not have is a 404, never the page kept as a font for a year.
+#[tokio::test]
+async fn fonts_are_kept_for_a_year_and_a_missing_one_is_a_404() {
+    let (h, _rx) = stub(40 * KB as u64);
+    let web = h.dir.path().join("web");
+    std::fs::create_dir_all(web.join("fonts")).unwrap();
+    std::fs::write(web.join("index.html"), b"<title>demoviewer</title>").unwrap();
+    std::fs::write(
+        web.join("fonts/archivo-latin-800-normal.woff2"),
+        b"wOF2font",
+    )
+    .unwrap();
+    let (status, headers, body) = call(&h.app, get("/fonts/archivo-latin-800-normal.woff2")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, b"wOF2font");
+    assert_eq!(
+        headers[header::CACHE_CONTROL],
+        "public, max-age=31536000, immutable"
+    );
+    for uri in ["/fonts/gone-latin-400-normal.woff2", "/fonts/"] {
+        let (status, headers, body) = call(&h.app, get(uri)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
+        assert_eq!(headers.get(header::CACHE_CONTROL), None, "{uri}");
+        assert!(!body.starts_with(b"<title>"), "{uri}");
     }
 }
 
@@ -1755,6 +1800,38 @@ async fn assets_send_precompressed_gzip_and_cache_headers_keyed_by_the_version_q
     let (status, headers, _) = call(&h.app, get("/?v=1")).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(cache(&headers).as_deref(), Some("no-cache"));
+}
+
+/// The site's own images (rank icons, the Steam logo, the homepage video): `/site/…` from
+/// `DEMOVIEWER_ASSETS/site`, cached for a year with a version query and revalidated without.
+#[tokio::test]
+async fn site_assets_are_served_with_version_caching() {
+    let (h, _rx) = stub(40 * KB as u64);
+    let root = h.dir.path();
+    std::fs::create_dir_all(root.join("assets/site/ranks")).unwrap();
+    std::fs::write(
+        root.join("assets/site/ranks/skillgroup7.webp"),
+        b"RIFF-webp",
+    )
+    .unwrap();
+    std::fs::write(root.join("assets/site/manifest.json"), b"{}").unwrap();
+    let cache = |headers: &HeaderMap| {
+        headers
+            .get(header::CACHE_CONTROL)
+            .map(|v| v.to_str().unwrap().to_string())
+    };
+    let (status, headers, body) = call(&h.app, get("/site/ranks/skillgroup7.webp?v=abcd")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, b"RIFF-webp");
+    assert_eq!(
+        cache(&headers).as_deref(),
+        Some("public, max-age=31536000, immutable")
+    );
+    let (status, headers, _) = call(&h.app, get("/site/manifest.json")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cache(&headers).as_deref(), Some("no-cache"));
+    let (status, _, _) = call(&h.app, get("/site/../manifest.json")).await;
+    assert_ne!(status, StatusCode::OK);
 }
 
 #[tokio::test]
@@ -1928,12 +2005,6 @@ async fn the_web_app_sends_its_gzip_siblings_to_gzip_clients() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(encoding(&headers), None);
     assert_eq!(body, script);
-    // A path that is not a file falls back to index.html, compressed the same way. (A match
-    // page, `/d/{id}`, is index.html with its tags added: tests/pages.rs.)
-    let (status, headers, body) = call(&h.app, gzip_get("/some/route")).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(encoding(&headers).as_deref(), Some("gzip"));
-    assert_eq!(body, gz(&page));
 }
 
 #[tokio::test]
@@ -2292,7 +2363,7 @@ async fn only_the_very_share_code_answers_from_the_cache() {
     h.store.matches().insert(MatchSummary {
         sha256: "cd".repeat(32),
         match_id: Some("42".into()),
-        ..summarize(&tiny_match("de_nuke"))
+        ..summarize(&tiny_match("de_nuke"), false)
     });
     let replay = Store::new_id();
     h.store.create_from(&replay, Source::Url);
@@ -2671,6 +2742,7 @@ async fn an_answer_off_valve_or_for_another_match_fails_the_job() {
             .parse()
             .unwrap(),
             played_unix: None,
+            info: None,
         })
     });
     let h = with_resolver(fake.clone(), |d| config(d, 40 * KB as u64));
@@ -2700,4 +2772,350 @@ async fn without_gcbot_a_share_code_is_503() {
     assert!(rx.try_recv().is_err());
     let (_, v) = call_json(&h.app, get("/api/site")).await;
     assert_eq!(v, json!({"sharecodes": false}));
+}
+
+// ---- FACEIT room links ------------------------------------------------------------------
+
+/// The FACEIT Data API key [`fake_faceit_data`] is asked with.
+const FACEIT_KEY: &str = "00000000-1111-2222-3333-444444444444";
+/// A FACEIT match whose demo this server may download. Until the spike names FACEIT's demo hosts
+/// ([`FACEIT_DEMO_HOSTS`](demoviewer_server::ingest::FACEIT_DEMO_HOSTS) is empty), only a Valve
+/// replay host passes the allowlist, so the fake puts its demo there.
+const ROOM: &str = "1-2f3e4d5c-6b7a-4980-8f1e-2d3c4b5a6978";
+/// Its demo, on a host the allowlist takes.
+const ROOM_DEMO: &str = "https://replay123.valve.net/730/1-2f3e4d5c-1-1.dem.bz2";
+/// When it finished.
+const ROOM_FINISHED: u64 = 1_761_003_600;
+/// A FACEIT match with no demo yet.
+const NO_DEMO: &str = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+/// A FACEIT match whose demo is on FACEIT's CDN, which the allowlist does not take (yet).
+const OFF_LIST: &str = "1-9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a";
+/// A FACEIT match FACEIT fails to answer for (`500`).
+const OUTAGE: &str = "2b3c4d5e-6f70-4182-9a3b-4c5d6e7f8091";
+
+/// A fake FACEIT Data API answering `/matches/{id}` for [`ROOM`], [`NO_DEMO`] and
+/// [`OFF_LIST`] when asked with [`FACEIT_KEY`], and failing for [`OUTAGE`] (`500`); any other
+/// match is a 404. Counts every call.
+async fn fake_faceit_data(calls: Arc<AtomicUsize>) -> url::Url {
+    use axum::extract::Path as UrlPath;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = url::Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+    let app = Router::new().route(
+        "/matches/{id}",
+        axum::routing::get(
+            move |UrlPath(id): UrlPath<String>, headers: HeaderMap| async move {
+                calls.fetch_add(1, Ordering::SeqCst);
+                let keyed = headers
+                    .get(header::AUTHORIZATION)
+                    .and_then(|v| v.to_str().ok())
+                    == Some(&format!("Bearer {FACEIT_KEY}"));
+                let demo = match id.as_str() {
+                    _ if !keyed => return (StatusCode::UNAUTHORIZED, String::new()),
+                    ROOM => format!("[\"{ROOM_DEMO}\"]"),
+                    NO_DEMO => "[]".to_owned(),
+                    OUTAGE => return (StatusCode::INTERNAL_SERVER_ERROR, String::new()),
+                    OFF_LIST => {
+                        r#"["https://demos-us-east.backblaze.faceit-cdn.net/cs2/x.dem.gz"]"#
+                            .to_owned()
+                    }
+                    _ => return (StatusCode::NOT_FOUND, r#"{"errors":[]}"#.to_owned()),
+                };
+                let body = format!(
+                    r#"{{"match_id":"{id}","game":"cs2","voting":{{"map":{{"pick":["de_mirage"]}}}},
+                    "demo_url":{demo},"finished_at":{ROOM_FINISHED},"status":"FINISHED"}}"#
+                );
+                (StatusCode::OK, body)
+            },
+        ),
+    );
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    base
+}
+
+/// A stub harness (its jobs go to the returned channel) with a FACEIT key and the fake Data API,
+/// each client allowed one ingest an hour; and the count of calls FACEIT got.
+async fn with_faceit() -> (Harness, UnboundedReceiver<Job>, Arc<AtomicUsize>) {
+    with_faceit_and(|c| c).await
+}
+
+/// [`with_faceit`] with its config changed by `cfg`.
+async fn with_faceit_and(
+    cfg: impl FnOnce(Config) -> Config,
+) -> (Harness, UnboundedReceiver<Job>, Arc<AtomicUsize>) {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let api = fake_faceit_data(calls.clone()).await;
+    let (jobs, rx) = Jobs::channel();
+    let h = harness(
+        move |d| {
+            cfg(Config {
+                ingests_per_hour: 1,
+                faceit_api_key: FaceitKey::new(FACEIT_KEY),
+                faceit_data_api: api,
+                ..config(d, 40 * KB as u64)
+            })
+        },
+        |_, _| jobs,
+    );
+    (h, rx, calls)
+}
+
+fn post_room(text: &str, ip: &str) -> Request<Body> {
+    post_json("/api/demos", json!({ "faceitMatch": text }), ip)
+}
+
+/// Whether the client at `ip` still has its one ingest: a replay URL is taken (`202`), then the
+/// next is refused (`429`).
+async fn has_its_ingest(h: &Harness, ip: &str) -> bool {
+    let url = json!({"url": "https://replay123.valve.net/730/b.dem.bz2"});
+    let (first, _) = call_json(&h.app, post_json("/api/demos", url.clone(), ip)).await;
+    let (second, _) = call_json(&h.app, post_json("/api/demos", url, ip)).await;
+    assert_eq!(second, StatusCode::TOO_MANY_REQUESTS);
+    first == StatusCode::ACCEPTED
+}
+
+/// A FACEIT match the site has, or is fetching, answers with that demo at once (Review Focus
+/// 5): FACEIT is not asked, and the poster's ingest is not spent, also when they post it again.
+#[tokio::test]
+async fn a_known_faceit_match_answers_its_demo_without_an_ingest() {
+    let (h, mut rx, calls) = with_faceit().await;
+    let (done, created) = h
+        .store
+        .claim_faceit(ROOM, &Store::new_id(), Some(ROOM_FINISHED));
+    assert!(created);
+    std::fs::write(h.store.pack_path(&"ab".repeat(32)), b"pack").unwrap();
+    h.store.update(&done.id, |r| {
+        r.status = Status::Done;
+        r.sha256 = Some("ab".repeat(32));
+    });
+    let (fetching, _) = h.store.claim_faceit(NO_DEMO, &Store::new_id(), None);
+
+    let ip = "198.51.100.20";
+    for text in [
+        format!("https://www.faceit.com/en/cs2/room/{ROOM}"),
+        ROOM.to_owned(),
+    ] {
+        let (status, v) = call_json(&h.app, post_room(&text, ip)).await;
+        assert_eq!(status, StatusCode::OK, "{text}: {v}");
+        assert_eq!(v, json!({"demoId": done.id, "cached": true}));
+    }
+    let (status, v) = call_json(&h.app, post_room(NO_DEMO, ip)).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{v}");
+    assert_eq!(v, json!({"demoId": fetching.id}));
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "FACEIT was asked");
+    assert!(rx.try_recv().is_err());
+    assert!(has_its_ingest(&h, ip).await);
+}
+
+/// One room posted by two people at once, then again: one record, one download, one demo id
+/// for everyone. FACEIT is asked by each post that found no record (both of the pair, which
+/// missed each other), never by the one after; only the post that made the record spent an
+/// ingest.
+#[tokio::test]
+async fn the_same_room_posted_twice_makes_one_record() {
+    let (h, mut rx, calls) = with_faceit().await;
+    let room = format!("https://www.faceit.com/en/cs2/room/{ROOM}");
+    let ((a, va), (b, vb)) = tokio::join!(
+        call_json(&h.app, post_room(&room, "203.0.113.30")),
+        call_json(&h.app, post_room(ROOM, "203.0.113.31")),
+    );
+    assert_eq!(
+        (a, b),
+        (StatusCode::ACCEPTED, StatusCode::ACCEPTED),
+        "{va} {vb}"
+    );
+    let id = va["demoId"].as_str().unwrap().to_owned();
+    assert_eq!(vb["demoId"], json!(id));
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    let (status, v) = call_json(&h.app, post_room(&room, "203.0.113.32")).await;
+    assert_eq!((status, &v["demoId"]), (StatusCode::ACCEPTED, &json!(id)));
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "FACEIT was asked again");
+
+    let Ok(Job::Url {
+        demo_id,
+        url,
+        slot: Some(_),
+    }) = rx.try_recv()
+    else {
+        panic!("no url job with a place")
+    };
+    assert_eq!((demo_id.as_str(), url.as_str()), (id.as_str(), ROOM_DEMO));
+    assert!(rx.try_recv().is_err(), "a second job");
+    let r = h.store.get(&id).unwrap();
+    assert_eq!(
+        (
+            r.status,
+            r.source,
+            r.faceit_match_id.as_deref(),
+            r.played_unix
+        ),
+        (
+            Status::Queued,
+            Source::Faceit,
+            Some(ROOM),
+            Some(ROOM_FINISHED)
+        )
+    );
+    assert_eq!(h.store.find_faceit(ROOM).map(|r| r.id), Some(id));
+    let records: Vec<Value> =
+        serde_json::from_slice(&std::fs::read(h.cfg.data_dir.join("demos.json")).unwrap()).unwrap();
+    assert_eq!(records.len(), 1, "{records:?}");
+    let spent = [
+        has_its_ingest(&h, "203.0.113.30").await,
+        has_its_ingest(&h, "203.0.113.31").await,
+    ];
+    assert_eq!(spent.iter().filter(|kept| !**kept).count(), 1, "{spent:?}");
+    assert!(has_its_ingest(&h, "203.0.113.32").await);
+}
+
+/// A room whose match has no demo yet is refused with the upload copy: no record, no job, and
+/// the ingest given back.
+#[tokio::test]
+async fn a_room_without_a_demo_is_422() {
+    let (h, mut rx, calls) = with_faceit().await;
+    let ip = "198.51.100.21";
+    let (status, v) = call_json(
+        &h.app,
+        post_room(&format!("faceit.com/de/cs2/room/{NO_DEMO}"), ip),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{v}");
+    assert_eq!(v, json!({"error": "FACEIT demos must be uploaded"}));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(h.store.find_faceit(NO_DEMO), None);
+    assert!(rx.try_recv().is_err());
+    assert!(has_its_ingest(&h, ip).await);
+}
+
+/// A room whose demo is on a host the download allowlist does not take is refused the same way,
+/// before any record: the server never fetches from a host off the list.
+#[tokio::test]
+async fn a_room_whose_demo_host_is_not_allowed_is_422() {
+    let (h, mut rx, calls) = with_faceit().await;
+    let ip = "198.51.100.22";
+    let (status, v) = call_json(&h.app, post_room(OFF_LIST, ip)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{v}");
+    assert_eq!(v, json!({"error": "FACEIT demos must be uploaded"}));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(h.store.find_faceit(OFF_LIST), None);
+    assert!(rx.try_recv().is_err());
+    assert!(has_its_ingest(&h, ip).await);
+}
+
+/// A match FACEIT does not have is a 404, and text that names no FACEIT match, or is longer
+/// than any link, a 400 without asking FACEIT; none spends the ingest.
+#[tokio::test]
+async fn a_room_faceit_does_not_have_is_404_and_other_text_is_400() {
+    let (h, mut rx, calls) = with_faceit().await;
+    let ip = "198.51.100.23";
+    let (status, v) = call_json(
+        &h.app,
+        post_room("1-00000000-0000-4000-8000-000000000000", ip),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{v}");
+    assert_eq!(v, json!({"error": "FACEIT has no match at that link"}));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    for text in [
+        "hello",
+        "https://www.faceit.com/en/players/someone",
+        "1-aaaa-bbbb",
+        "../matches/x",
+    ] {
+        let (status, v) = call_json(&h.app, post_room(text, ip)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{text}: {v}");
+    }
+    let long = format!(
+        "https://www.faceit.com/en/cs2/room/{ROOM}?{}",
+        "a".repeat(2048)
+    );
+    let (status, v) = call_json(&h.app, post_room(&long, ip)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{v}");
+    assert_eq!(v, json!({"error": "the link is too long"}));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(rx.try_recv().is_err());
+    assert!(has_its_ingest(&h, ip).await);
+}
+
+/// FACEIT failing to answer is a 503 that says so, and gives the poster's ingest and their
+/// place among the jobs on their way back: with one place in all and one ingest, the next URL
+/// they post is taken.
+#[tokio::test]
+async fn faceit_not_answering_is_503_and_gives_the_ingest_and_the_place_back() {
+    let (h, mut rx, calls) = with_faceit_and(|c| Config {
+        max_fetches: 1,
+        ..c
+    })
+    .await;
+    let ip = "198.51.100.25";
+    let (status, v) = call_json(&h.app, post_room(OUTAGE, ip)).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{v}");
+    assert_eq!(
+        v,
+        json!({"error": "FACEIT is not answering; try again in a minute"})
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(h.store.find_faceit(OUTAGE), None);
+    assert!(rx.try_recv().is_err());
+    let url = json!({"url": "https://replay123.valve.net/730/b.dem.bz2"});
+    let (status, v) = call_json(&h.app, post_json("/api/demos", url.clone(), ip)).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{v}");
+    // That URL's job holds the one place now.
+    let (status, v) = call_json(&h.app, post_json("/api/demos", url, "198.51.100.26")).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{v}");
+}
+
+/// A room the site has no record for spends one of the client's lookups, as a nickname does,
+/// and FACEIT's refusal keeps it spent: a client that has spent theirs is refused (`429`)
+/// without FACEIT being asked or an ingest spent, so posting a refused room again and again
+/// cannot keep FACEIT's gate busy. A match the site has still answers them, and other clients
+/// are not affected (review 2026-10-31).
+#[tokio::test]
+async fn a_client_out_of_lookups_gets_429_from_a_room_without_asking_faceit() {
+    let (h, mut rx, calls) = with_faceit_and(|c| Config {
+        lookups_per_hour: 1,
+        ..c
+    })
+    .await;
+    let (known, _) = h.store.claim_faceit(ROOM, &Store::new_id(), None);
+    let ip = "198.51.100.27";
+    let (status, v) = call_json(&h.app, post_room(NO_DEMO, ip)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{v}");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    for room in [NO_DEMO, OFF_LIST] {
+        let (status, v) = call_json(&h.app, post_room(room, ip)).await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{room}: {v}");
+        assert_eq!(
+            v,
+            json!({"error": "Too many lookups from here; try again later"})
+        );
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "FACEIT was asked");
+    let (status, v) = call_json(&h.app, post_room(ROOM, ip)).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{v}");
+    assert_eq!(v, json!({"demoId": known.id}));
+    assert!(rx.try_recv().is_err());
+    assert!(has_its_ingest(&h, ip).await);
+
+    let (status, v) = call_json(&h.app, post_room(OFF_LIST, "198.51.100.28")).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{v}");
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+/// Without a FACEIT key the server takes no FACEIT links, and says so; a post names one thing.
+#[tokio::test]
+async fn without_a_faceit_key_a_room_is_503() {
+    let (h, mut rx) = stub(40 * KB as u64);
+    let (status, v) = call_json(&h.app, post_room(ROOM, "198.51.100.24")).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{v}");
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("this server does not take FACEIT links"),
+        "{v}"
+    );
+    let both = json!({"url": "https://replay123.valve.net/730/a.dem.bz2", "faceitMatch": ROOM});
+    let (status, v) = call_json(&h.app, post_json("/api/demos", both, "198.51.100.24")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{v}");
+    assert!(rx.try_recv().is_err());
 }

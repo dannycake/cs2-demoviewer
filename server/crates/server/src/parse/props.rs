@@ -1,6 +1,7 @@
 //! The parser passes, and typed access to the per-tick player columns they produce.
 
 use ahash::AHashMap;
+use demoviewer_pack::PlayerRank;
 use parser::first_pass::parser_settings::{rm_user_friendly_names, ParserInputs};
 use parser::first_pass::read_bits::DemoParserError;
 use parser::parse_demo::{DemoOutput, Parser, ParsingMode};
@@ -32,6 +33,12 @@ pub(super) const PLAYER_PROPS: &[&str] = &[
     "zoom_lvl",
     "inventory",
     "crosshair_code",
+    "rank",
+    "comp_rank_type",
+    "comp_wins",
+    "rank_if_win",
+    "rank_if_loss",
+    "rank_if_tie",
 ];
 
 /// Team-entity prop the events pass attaches to every event as `t_score` / `ct_score`.
@@ -266,6 +273,12 @@ pub(super) struct TickTable<'a> {
     zoom: Column<'a>,
     inventory: Column<'a>,
     crosshair: Column<'a>,
+    rank: Column<'a>,
+    rank_kind: Column<'a>,
+    rank_wins: Column<'a>,
+    rank_if_win: Column<'a>,
+    rank_if_loss: Column<'a>,
+    rank_if_tie: Column<'a>,
     /// Per steamid: `(tick, row)` for every row that has a position, sorted by tick.
     by_player: AHashMap<u64, Vec<(i32, usize)>>,
 }
@@ -312,6 +325,12 @@ impl<'a> TickTable<'a> {
             zoom: c("zoom_lvl"),
             inventory: c("inventory"),
             crosshair: c("crosshair_code"),
+            rank: c("rank"),
+            rank_kind: c("comp_rank_type"),
+            rank_wins: c("comp_wins"),
+            rank_if_win: c("rank_if_win"),
+            rank_if_loss: c("rank_if_loss"),
+            rank_if_tie: c("rank_if_tie"),
             by_player: AHashMap::default(),
         };
         let steamid = c("steamid");
@@ -390,6 +409,30 @@ impl<'a> TickTable<'a> {
             .find_map(|&(_, row)| self.crosshair.str(row).filter(|c| !c.is_empty()))
     }
 
+    /// The player's rank as the match started: the first row whose rank type is set (the
+    /// scoreboard's pre-match state; later rows can drop back to 0), all six values from that
+    /// row. A player the demo never ranks (a tournament server ranks nobody) gets their first
+    /// row's, type 0; `None` only when the rows carry no rank type at all (a demo or a table
+    /// without the rank props).
+    pub fn rank(&self, steamid: u64) -> Option<PlayerRank> {
+        let rows = self.by_player.get(&steamid)?;
+        let at = |row: usize| {
+            let kind = self.rank_kind.i32(row)?;
+            let v = |c: &Column| c.i32(row).unwrap_or(0);
+            Some(PlayerRank {
+                kind: u8::try_from(kind).unwrap_or(0),
+                value: v(&self.rank),
+                wins: v(&self.rank_wins),
+                if_win: v(&self.rank_if_win),
+                if_loss: v(&self.rank_if_loss),
+                if_tie: v(&self.rank_if_tie),
+            })
+        };
+        rows.iter()
+            .find_map(|&(_, row)| at(row).filter(|r| r.kind != 0))
+            .or_else(|| rows.iter().find_map(|&(_, row)| at(row)))
+    }
+
     /// The latest tick of any row, or `None` for an empty table.
     pub fn last_tick(&self) -> Option<i32> {
         self.by_player
@@ -448,6 +491,31 @@ mod tests {
         assert!(t.state_at(7, 0, 53, 32).is_none());
         assert_eq!(t.state_at(7, 0, 52, 32).unwrap().tick, 20);
         assert!(t.state_at(8, 0, 12, 32).is_none());
+    }
+
+    /// The first row with a rank type is the rank; a player the demo never ranks (a tournament
+    /// server's) has type 0, and only a table without the rank props has none.
+    #[test]
+    fn the_rank_is_the_first_ranked_row_and_type_0_when_none_is() {
+        let mut cols =
+            test_table::columns(&[(7, 10, 1.0), (7, 11, 1.0), (7, 12, 1.0), (8, 10, 1.0)]);
+        let col = |v: [i32; 4]| VarVec::I32(v.iter().map(|&x| Some(x)).collect());
+        cols.insert("comp_rank_type", col([0, 12, 0, 0]));
+        cols.insert("rank", col([0, 9, 0, 0]));
+        cols.insert("comp_wins", col([0, 31, 0, 0]));
+        cols.insert("rank_if_win", col([0, 10, 0, 0]));
+        cols.insert("rank_if_loss", col([0, 8, 0, 0]));
+        cols.insert("rank_if_tie", col([0, 9, 0, 0]));
+        let t = TickTable::new(|n| cols.get(n));
+        let r = t.rank(7).unwrap();
+        assert_eq!(
+            (r.kind, r.value, r.wins, r.if_win, r.if_loss, r.if_tie),
+            (12, 9, 31, 10, 8, 9)
+        );
+        assert_eq!(t.rank(8).map(|r| (r.kind, r.value)), Some((0, 0)));
+        assert!(t.rank(9).is_none());
+        let bare = test_table::columns(&[(7, 10, 1.0)]);
+        assert!(TickTable::new(|n| bare.get(n)).rank(7).is_none());
     }
 
     #[test]

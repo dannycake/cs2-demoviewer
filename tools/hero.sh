@@ -4,8 +4,9 @@
 # CS2's own screenshot of each map, panorama/images/map_icons/screenshots/1080p/<map>_png.vtex_c
 # in pak01, as assets/maps/<map>/hero.png (hero.mjs: 1200×630, cropped to cover): the background
 # of the match preview card that a link pasted in Discord shows (server/crates/server/src/
-# preview.rs). The browser never loads it, so it is in no manifest. A map CS2 has no screenshot
-# for is reported and skipped; its card falls back to the radar. `all` is MAPS (lib/env.sh).
+# preview.rs). The browser never loads it, so it is in no manifest; build-site.mjs makes the
+# small strip a profile shows of it (site/maps/<map>.webp). A map CS2 has no screenshot for is
+# reported and skipped; its card falls back to the radar. `all` is MAPS (lib/env.sh).
 set -euo pipefail
 
 [[ $# -gt 0 ]] || { printf 'usage: %s <map>... | all\n' "$(basename -- "$0")" >&2; exit 2; }

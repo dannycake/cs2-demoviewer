@@ -14,8 +14,10 @@
 // view first shows. The scene loads the world and the players at its preset's tier (`low`'s
 // phone tier, smaller textures, where the assets have it) and swaps them on a change to or from
 // `low`, which the view waits for as for the first load; a preset measured here keeps the files
-// it was measured with. A tap on a player follows them; a finger's tap on empty space plays or
-// pauses.
+// it was measured with. Until the map's first world is in, the view is black (no name tags nor
+// hands over an empty scene) and its bytes go to `onWorldLoad`, for DemoView's loading panel; a
+// later swap of tier keeps the world drawn under a quiet note. A tap on a player follows them; a
+// finger's tap on empty space plays or pauses.
 
 import { useEffect, useRef, useState } from 'react';
 import { messageOf } from '../errors';
@@ -33,6 +35,12 @@ import styles from './Viewport.module.css';
 
 type LoadState = 'loading' | 'done' | 'failed';
 
+/** The bytes of the map's first world in so far, and the file's size when its manifest says. */
+export interface WorldLoad {
+  loaded: number;
+  total: number | null;
+}
+
 export interface ViewportProps {
   /**
    * Hears the scene once it is made, and null when it is let go (on unmount). The same function
@@ -41,9 +49,18 @@ export interface ViewportProps {
   onScene: (scene: Scene | null) => void;
   /** The free camera's pose in the link the demo opened with (`cam=free&at=…`), or null. */
   pose: FreePose | null;
+  /**
+   * Hears the first world's load: its bytes as they arrive (about every tenth of a megabyte),
+   * and null once it is in, has failed or the view has gone.
+   */
+  onWorldLoad?: (load: WorldLoad | null) => void;
 }
 
-export default function Viewport({ onScene, pose }: ViewportProps) {
+export default function Viewport({
+  onScene,
+  pose,
+  onWorldLoad,
+}: ViewportProps) {
   const viewRef = useRef<HTMLDivElement>(null);
   /** The canvas the current scene draws on, made with it (see the scene's effect). */
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -70,6 +87,8 @@ export default function Viewport({ onScene, pose }: ViewportProps) {
     error?: string;
   } | null>(null);
   const posed = useRef(false);
+  /** Whether a world of the map has been drawn: after that, a load is a swap of tier. */
+  const [drewWorld, setDrewWorld] = useState(false);
 
   // The scene, on a canvas made for it and taken out with it: a scene let go loses its WebGL
   // context at once (`Scene.dispose`), and a canvas whose context was lost gives no other, so a
@@ -222,6 +241,7 @@ export default function Viewport({ onScene, pose }: ViewportProps) {
         if (playbackStore.getState().assetsMissing)
           playbackStore.setState({ assetsMissing: false });
         setWorld({ key, state: 'done' });
+        setDrewWorld(true);
       },
       (e) => {
         if (!live) return;
@@ -245,6 +265,25 @@ export default function Viewport({ onScene, pose }: ViewportProps) {
     (assetsMissing || (!!worldNow && worldNow.state !== 'loading'));
   const swapping = !!pack && !assetsMissing && worldNow?.state === 'loading';
   const drawn = ready && !assetsMissing && worldNow?.state === 'done';
+  /** The map's first world on its way: the view stays black, and DemoView shows the bytes. */
+  const firstWorld = swapping && !drewWorld;
+
+  // The first world's bytes, to DemoView's panel, about every tenth of a megabyte.
+  useEffect(() => {
+    if (!scene || !firstWorld || !onWorldLoad) return;
+    let shown = -1;
+    onWorldLoad({ loaded: 0, total: null });
+    scene.onWorldBytes = (loaded, total) => {
+      const step = Math.floor(loaded / 104_858);
+      if (step === shown) return;
+      shown = step;
+      onWorldLoad({ loaded, total });
+    };
+    return () => {
+      scene.onWorldBytes = null;
+      onWorldLoad(null);
+    };
+  }, [scene, firstWorld, onWorldLoad]);
 
   // A link's pose, once the map is in (or known missing) and while the camera is still Free.
   useEffect(() => {
@@ -274,6 +313,7 @@ export default function Viewport({ onScene, pose }: ViewportProps) {
       data-ready={ready}
     >
       {assetsMissing && <div className={styles.grid} aria-hidden="true" />}
+      {firstWorld && <div className={styles.cover} aria-hidden="true" />}
       <div className={styles.banners}>
         {glError && (
           <p className={styles.banner} role="alert" title={glError}>
@@ -287,17 +327,17 @@ export default function Viewport({ onScene, pose }: ViewportProps) {
         )}
         {worldNow?.error && (
           <p className={styles.banner} role="alert">
-            the {map} world did not load: {worldNow.error}
+            The {map && mapName(map)} world did not load: {worldNow.error}
           </p>
         )}
         {rigsNow?.error && (
           <p className={styles.banner} role="alert">
-            the player models did not load: {rigsNow.error}
+            The player models did not load: {rigsNow.error}
           </p>
         )}
-        {swapping && rigsNow && (
+        {swapping && rigsNow && drewWorld && (
           <p className={styles.note} role="status">
-            loading the world…
+            Loading the world…
           </p>
         )}
       </div>
